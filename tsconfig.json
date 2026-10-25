@@ -1,0 +1,32 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@/assets/*": [
+        "./assets/*"
+      ],
+      "@atom": [
+        "./src/components/atoms"
+      ],
+      "@molecule": [
+        "./src/components/molecules"
+      ],
+      "@organism": [
+        "./src/components/organisms"
+      ],
+      "@template": [
+        "./src/components/templates"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
