@@ -8,6 +8,8 @@ The mobile app of Orbis, built with [Expo](https://expo.dev) and Expo Router.
 
 The app finds the server on the computer running Expo automatically. To use another server, set `EXPO_PUBLIC_API_URL` in `.env.local` (copied from `example.env`). Set `EXPO_PUBLIC_WEB_URL` to the website's base URL when using a staging site; the default points to `https://orbis.polsar.studio` for the Terms and Community guidelines links.
 
+Discord and Twitch provider redirect URLs should continue to target the server's `WEB_URL` callbacks (`/auth/discord/callback` and `/auth/twitch/callback`). Those web callbacks return the authorization code and signed state to the app's `orbis` deep link; provider access tokens are exchanged by the server and are not placed in the deep link.
+
 ## Deploying
 `pnpm run deploy` publishes an over-the-air update with EAS Update. Before the first deploy, run once in this folder:
 
