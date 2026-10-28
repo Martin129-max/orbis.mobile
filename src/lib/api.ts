@@ -27,7 +27,11 @@ export type OAuthConnections = {
 export type OAuthResult =
   | { access_token: string }
   | { signup: { token: string; username: string; avatarUrl: string | null } }
-  | { linked: OAuthProvider; communityId?: number };
+  | {
+      linked: OAuthProvider;
+      communityId?: number;
+      avatar?: { url: string; token: string };
+    };
 export type OAuthSignupDetails = {
   provider: OAuthProvider;
   token: string;
@@ -292,6 +296,21 @@ export async function finishOAuthSignup(
   });
   if (!res.ok) {
     throw new Error(await errorMessage(res, 'Could not finish creating your account.'));
+  }
+  return res.json();
+}
+
+export async function applyLinkedOAuthAvatar(
+  token: string,
+  avatarToken: string,
+): Promise<{ avatarUrl: string }> {
+  const res = await api('/auth/oauth/avatar', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: avatarToken }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not use your provider avatar.'));
   }
   return res.json();
 }

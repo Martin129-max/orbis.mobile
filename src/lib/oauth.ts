@@ -12,12 +12,21 @@ import { secureStorage } from '@/lib/storage';
 
 const PENDING_OAUTH_KEY = 'oauth-pending-v1';
 const PENDING_SIGNUP_KEY = 'oauth-signup-v1';
+const PENDING_AVATAR_KEY = 'oauth-avatar-v1';
 let takingPendingOAuth = false;
 
 export type PendingOAuth = {
   provider: OAuthProvider;
   nonce: string;
   token: string | null;
+  destination: string;
+};
+
+export type PendingOAuthAvatar = {
+  provider: OAuthProvider;
+  url: string;
+  token: string;
+  accountToken: string;
   destination: string;
 };
 
@@ -135,4 +144,41 @@ export async function getPendingOAuthSignup(): Promise<OAuthSignupDetails | null
 
 export async function clearPendingOAuthSignup() {
   await secureStorage.removeItem(PENDING_SIGNUP_KEY);
+}
+
+export async function savePendingOAuthAvatar(avatar: PendingOAuthAvatar) {
+  await secureStorage.setItem(PENDING_AVATAR_KEY, JSON.stringify(avatar));
+}
+
+export async function getPendingOAuthAvatar(): Promise<PendingOAuthAvatar | null> {
+  const raw = await secureStorage.getItem(PENDING_AVATAR_KEY);
+  if (!raw) return null;
+  try {
+    const avatar: unknown = JSON.parse(raw);
+    if (
+      avatar &&
+      typeof avatar === 'object' &&
+      'provider' in avatar &&
+      typeof avatar.provider === 'string' &&
+      isOAuthProvider(avatar.provider) &&
+      'url' in avatar &&
+      typeof avatar.url === 'string' &&
+      'token' in avatar &&
+      typeof avatar.token === 'string' &&
+      'accountToken' in avatar &&
+      typeof avatar.accountToken === 'string' &&
+      'destination' in avatar &&
+      typeof avatar.destination === 'string' &&
+      avatar.destination.startsWith('/')
+    ) {
+      return avatar as PendingOAuthAvatar;
+    }
+  } catch {
+    throw new Error('The saved avatar offer is invalid. Please try again.');
+  }
+  throw new Error('The saved avatar offer is invalid. Please try again.');
+}
+
+export async function clearPendingOAuthAvatar() {
+  await secureStorage.removeItem(PENDING_AVATAR_KEY);
 }

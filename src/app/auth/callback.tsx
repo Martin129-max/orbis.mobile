@@ -7,6 +7,7 @@ import * as Template from '@template';
 import { completeOAuth } from '@/lib/api';
 import { safeNext } from '@/lib/navigation';
 import {
+  savePendingOAuthAvatar,
   isOAuthProvider,
   savePendingOAuthSignup,
   takePendingOAuth,
@@ -70,6 +71,15 @@ export default function OAuthCallbackScreen() {
       } else if ('signup' in result) {
         await savePendingOAuthSignup({ provider: providerValue, ...result.signup });
         router.replace('/auth/oauth-signup' as Href);
+        return;
+      } else if (result.avatar && pending.token) {
+        await savePendingOAuthAvatar({
+          provider: providerValue,
+          ...result.avatar,
+          accountToken: pending.token,
+          destination: pending.destination,
+        });
+        router.replace('/auth/oauth-avatar' as Href);
         return;
       }
 
