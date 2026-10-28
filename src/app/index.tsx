@@ -1,4 +1,4 @@
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, type Href } from 'expo-router';
 import * as Atom from '@atom';
 import * as Organism from '@organism';
 import * as Template from '@template';
@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth-store';
 export default function HomeScreen() {
   const signedIn = useAuthStore((state) => Boolean(state.token));
 
-  if (signedIn) return <Redirect href="/(tabs)" />;
+  if (signedIn) return <Redirect href={'/(protected)/(tabs)' as Href} />;
 
   return (
     <Template.ScreenTemplate>

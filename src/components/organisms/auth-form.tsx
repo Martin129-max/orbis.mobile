@@ -1,11 +1,14 @@
-import { Link, router } from 'expo-router';
-import { useState } from 'react';
+import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import * as Atom from '@atom';
 import * as Molecule from '@molecule';
 
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { WEB_URL } from '@/lib/api';
+import { safeNext } from '@/lib/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 
 type Mode = 'login' | 'signup';
@@ -33,19 +36,38 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const theme = useTheme();
   const login = useAuthStore((state) => state.login);
   const signup = useAuthStore((state) => state.signup);
+  const { next } = useLocalSearchParams<{ next?: string | string[] }>();
+  const submitting = useRef(false);
+  const request = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
   const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [legalError, setLegalError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const { title, submit, switchText, switchLabel, switchHref, description } = content[mode];
+  const returnTo = safeNext(next) ?? '/(protected)/(tabs)';
+  const switchDestination = safeNext(next);
   const ready = mode === 'login'
-    ? identifier.trim().length > 0 && password.length > 0
-    : email.trim().length > 0 && username.trim().length > 0 && password.length > 0;
+    ? identifier.trim().length > 0 && identifier.trim().length <= 320 && password.length > 0
+    : email.length > 0 &&
+      email.length <= 254 &&
+      username.length > 0 &&
+      password.length > 0;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      request.current?.abort();
+    };
+  }, []);
 
   async function handleSubmit() {
+    if (submitting.current) return;
     setError(null);
     if (!ready) {
       setError(mode === 'login'
@@ -53,33 +75,70 @@ export function AuthForm({ mode }: { mode: Mode }) {
         : 'Complete all fields to create your account.');
       return;
     }
+    if (mode === 'signup') {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError('Enter a valid email address.');
+        return;
+      }
+      if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+        setError('Usernames must be 3–20 characters: letters, numbers, or underscores.');
+        return;
+      }
+      if (password.length < 6) {
+        setError('Passwords must be at least 6 characters.');
+        return;
+      }
+    }
+    submitting.current = true;
+    const controller = new AbortController();
+    request.current = controller;
     setPending(true);
 
     try {
       if (mode === 'login') {
-        await login({ identifier: identifier.trim(), password });
+        await login({ identifier: identifier.trim(), password }, controller.signal);
       } else {
-        await signup({ email: email.trim(), username: username.trim(), password });
+        await signup(
+          { email, username, password },
+          controller.signal,
+        );
       }
-      router.replace('/(tabs)');
+      router.replace(returnTo as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
-      setPending(false);
+      if (!controller.signal.aborted && mounted.current) {
+        setError(e instanceof Error ? e.message : 'Something went wrong.');
+      }
+    } finally {
+      submitting.current = false;
+      if (mounted.current) setPending(false);
+      if (request.current === controller) request.current = null;
+    }
+  }
+
+  function cancelAndGoHome() {
+    request.current?.abort();
+    router.replace('/');
+  }
+
+  async function openLegalPage(page: 'terms' | 'guidelines') {
+    setLegalError(null);
+    try {
+      await Linking.openURL(`${WEB_URL}/${page}`);
+    } catch {
+      setLegalError('Could not open this page. Please try again.');
     }
   }
 
   return (
     <View style={styles.form}>
-      {mode === 'login' && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.replace('/')}
-          style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
-          <Atom.ThemedText type="smallBold" style={{ color: theme.accent }}>
-            ‹  Back to Orbis
-          </Atom.ThemedText>
-        </Pressable>
-      )}
+      <Pressable
+        accessibilityRole="button"
+        onPress={cancelAndGoHome}
+        style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
+        <Atom.ThemedText type="smallBold" style={{ color: theme.accent }}>
+          ‹  Back to Orbis
+        </Atom.ThemedText>
+      </Pressable>
       <View style={styles.brand}>
         <Atom.ThemedText type="smallBold" style={[styles.wordmark, { color: theme.accent }]}>
           ORBIS
@@ -111,6 +170,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               autoCapitalize="none"
               autoComplete="username"
               autoCorrect={false}
+              maxLength={320}
               returnKeyType="next"
             />
             <View style={styles.passwordField}>
@@ -150,6 +210,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
+              returnKeyType="next"
+              maxLength={254}
             />
             <Molecule.FormField
               label="Username"
@@ -158,6 +220,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
               autoCapitalize="none"
               autoComplete="username-new"
               autoCorrect={false}
+              maxLength={20}
+              returnKeyType="next"
             />
             <Molecule.FormField
               label="Password"
@@ -165,6 +229,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="new-password"
+              returnKeyType="done"
               onSubmitEditing={handleSubmit}
             />
           </View>
@@ -176,10 +241,42 @@ export function AuthForm({ mode }: { mode: Mode }) {
           disabled={!ready || pending}
           onPress={handleSubmit}
         />
+        {mode === 'signup' && (
+          <View style={styles.legal}>
+            <Atom.ThemedText type="small" themeColor="textSecondary">
+              By signing up, you agree to our{' '}
+            </Atom.ThemedText>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => openLegalPage('terms')}
+              style={({ pressed }) => pressed && styles.pressed}>
+              <Atom.ThemedText type="small" style={{ color: theme.accent, textDecorationLine: 'underline' }}>
+                Terms
+              </Atom.ThemedText>
+            </Pressable>
+            <Atom.ThemedText type="small" themeColor="textSecondary"> and </Atom.ThemedText>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => openLegalPage('guidelines')}
+              style={({ pressed }) => pressed && styles.pressed}>
+              <Atom.ThemedText type="small" style={{ color: theme.accent, textDecorationLine: 'underline' }}>
+                Community guidelines
+              </Atom.ThemedText>
+            </Pressable>
+            <Atom.ThemedText type="small" themeColor="textSecondary">.</Atom.ThemedText>
+          </View>
+        )}
+        {legalError && <Atom.ErrorMessage>{legalError}</Atom.ErrorMessage>}
         <View style={[styles.divider, { backgroundColor: theme.divider }]} />
         <Atom.ThemedText type="small" themeColor="textSecondary">
           {switchText}{' '}
-          <Link href={switchHref} replace>
+          <Link
+            href={
+              switchDestination
+                ? { pathname: switchHref, params: { next: switchDestination } }
+                : switchHref
+            }
+            replace>
             <Atom.ThemedText type="smallBold" style={{ color: theme.accent }}>
               {switchLabel}
             </Atom.ThemedText>
@@ -226,6 +323,11 @@ const styles = StyleSheet.create({
   },
   fields: {
     gap: Spacing.three,
+  },
+  legal: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
   },
   passwordField: {
     gap: Spacing.one,

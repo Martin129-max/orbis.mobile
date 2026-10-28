@@ -6,6 +6,9 @@ function devServerUrl() {
 }
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || devServerUrl();
+export const WEB_URL = (
+  process.env.EXPO_PUBLIC_WEB_URL || 'https://orbis.polsar.studio'
+).replace(/\/+$/, '');
 
 export type LoginCredentials = { identifier: string; password: string };
 
@@ -118,7 +121,10 @@ export async function api(path: string, init?: RequestInit) {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, init);
-  } catch {
+  } catch (error) {
+    if (init?.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw error;
+    }
     throw new Error("Can't reach Orbis right now. Please try again.");
   }
   if (res.status === 429) {
@@ -131,19 +137,51 @@ function authHeaders(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function responseMessages(res: Response): Promise<string[]> {
+  const body: unknown = await res.json().catch(() => null);
+  if (!body || typeof body !== 'object' || !('message' in body)) return [];
+  const message = body.message;
+  if (typeof message === 'string') return [message];
+  if (Array.isArray(message)) return message.filter((item): item is string => typeof item === 'string');
+  return [];
+}
+
 async function errorMessage(res: Response, fallback: string) {
-  const { message } = await res.json().catch(() => ({ message: null }));
-  return typeof message === 'string' ? `${message}.` : fallback;
+  const [message] = await responseMessages(res);
+  return message ? `${message.replace(/[.!?]+$/, '')}.` : fallback;
+}
+
+async function validationErrorMessage(res: Response, fallback: string) {
+  const messages = await responseMessages(res);
+  const message = messages.join(' ').toLowerCase();
+
+  if (message.includes('email')) return 'Enter a valid email address.';
+  if (message.includes('username')) {
+    return 'Usernames must be 3–20 characters: letters, numbers, or underscores.';
+  }
+  if (message.includes('password')) {
+    return message.includes('shorter')
+      ? 'Passwords must be 200 characters or fewer.'
+      : 'Passwords must be at least 6 characters.';
+  }
+  if (message.includes('identifier')) {
+    return message.includes('shorter')
+      ? 'Email addresses or usernames must be 320 characters or fewer.'
+      : 'Enter a valid email address or username.';
+  }
+  return fallback;
 }
 
 async function authenticate(
   path: string,
   credentials: LoginCredentials | SignupDetails,
+  signal?: AbortSignal,
 ): Promise<string> {
   const res = await api(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
+    signal,
   });
 
   if (res.status === 401) {
@@ -153,7 +191,14 @@ async function authenticate(
     throw new Error(await errorMessage(res, 'That account already exists.'));
   }
   if (res.status === 400) {
-    throw new Error('Usernames are 3–20 characters: letters, numbers, or underscores.');
+    throw new Error(
+      await validationErrorMessage(
+        res,
+        path === '/auth/login'
+          ? 'Check your email or username and password, then try again.'
+          : 'Check your email, username, and password, then try again.',
+      ),
+    );
   }
   if (!res.ok) throw new Error('Something went wrong. Please try again.');
 
@@ -161,18 +206,22 @@ async function authenticate(
   return access_token;
 }
 
-export function signup(details: SignupDetails) {
-  return authenticate('/auth/signup', details);
+export function signup(details: SignupDetails, signal?: AbortSignal) {
+  return authenticate('/auth/signup', details, signal);
 }
 
-export function login(credentials: LoginCredentials) {
-  return authenticate('/auth/login', credentials);
+export function login(credentials: LoginCredentials, signal?: AbortSignal) {
+  return authenticate('/auth/login', credentials, signal);
 }
 
 export async function getProfile(token: string): Promise<Profile | null> {
   const res = await api('/users', { headers: authHeaders(token) });
 
-  return res.ok ? res.json() : null;
+  if (res.status === 401) return null;
+  if (res.status === 403) throw new Error('You can’t access this profile.');
+  if (res.status === 404) throw new Error('Your profile could not be found.');
+  if (!res.ok) throw new Error('Could not load your profile. Please try again.');
+  return res.json();
 }
 
 export async function getServerStatus(): Promise<string> {

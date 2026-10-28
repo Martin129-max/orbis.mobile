@@ -8,8 +8,8 @@ import { secureStorage } from '@/lib/storage';
 type AuthState = {
   token: string | null;
   profile: Profile | null;
-  login: (credentials: LoginCredentials) => Promise<void>;
-  signup: (details: SignupDetails) => Promise<void>;
+  login: (credentials: LoginCredentials, signal?: AbortSignal) => Promise<void>;
+  signup: (details: SignupDetails, signal?: AbortSignal) => Promise<void>;
   logout: () => void;
   fetchProfile: () => Promise<Profile | null>;
 };
@@ -19,11 +19,11 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       token: null,
       profile: null,
-      login: async (credentials) => {
-        set({ token: await api.login(credentials) });
+      login: async (credentials, signal) => {
+        set({ token: await api.login(credentials, signal) });
       },
-      signup: async (details) => {
-        set({ token: await api.signup(details) });
+      signup: async (details, signal) => {
+        set({ token: await api.signup(details, signal) });
       },
       logout: () => set({ token: null, profile: null }),
       fetchProfile: async () => {
@@ -34,14 +34,14 @@ export const useAuthStore = create<AuthState>()(
           return null;
         }
 
-        try {
-          const profile = await api.getProfile(token);
-          set({ profile: profile ?? null });
-          return profile;
-        } catch {
-          set({ profile: null });
+        const profile = await api.getProfile(token);
+        if (!profile) {
+          get().logout();
           return null;
         }
+
+        set({ profile });
+        return profile;
       },
     }),
     {
