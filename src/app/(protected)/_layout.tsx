@@ -8,8 +8,9 @@ export default function ProtectedLayout() {
   const pathname = usePathname();
   const params = useGlobalSearchParams<Record<string, string | string[]>>();
   const next = safeNext(pathWithQuery(pathname, params));
+  const isPublicProfile = pathname.startsWith('/users/');
 
-  if (!signedIn) {
+  if (!signedIn && !isPublicProfile) {
     return <Redirect href={{ pathname: '/login', params: next ? { next } : undefined }} />;
   }
 

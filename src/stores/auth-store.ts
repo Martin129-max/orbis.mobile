@@ -10,7 +10,7 @@ type AuthState = {
   profile: Profile | null;
   login: (credentials: LoginCredentials, signal?: AbortSignal) => Promise<void>;
   loginWithToken: (token: string) => void;
-  setAvatarUrl: (avatarUrl: string) => void;
+  setAvatarUrl: (avatarUrl: string | null) => void;
   signup: (details: SignupDetails, signal?: AbortSignal) => Promise<void>;
   logout: () => void;
   fetchProfile: () => Promise<Profile | null>;
