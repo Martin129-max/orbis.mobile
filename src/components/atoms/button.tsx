@@ -29,15 +29,15 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: primary ? theme.text : theme.backgroundElement,
+          backgroundColor: primary ? theme.accent : theme.backgroundElement,
           opacity: inactive ? 0.5 : pressed ? 0.8 : 1,
         },
       ]}
       {...props}>
       {loading ? (
-        <ActivityIndicator color={primary ? theme.background : theme.text} />
+        <ActivityIndicator color={primary ? theme.accentForeground : theme.text} />
       ) : (
-        <ThemedText type="smallBold" style={{ color: primary ? theme.background : theme.text }}>
+        <ThemedText type="smallBold" style={{ color: primary ? theme.accentForeground : theme.text }}>
           {label}
         </ThemedText>
       )}

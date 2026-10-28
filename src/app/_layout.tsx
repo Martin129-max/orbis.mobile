@@ -26,7 +26,14 @@ export default function RootLayout() {
           <Stack.Screen name="register" />
         </Stack.Protected>
         <Stack.Protected guard={signedIn}>
-          <Stack.Screen name="profile" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="search" />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="notifications/[notificationId]" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="communities/[communityId]" />
+          <Stack.Screen name="communities/[communityId]/settings" />
+          <Stack.Screen name="users/[username]" />
         </Stack.Protected>
       </Stack>
     </ThemeProvider>
