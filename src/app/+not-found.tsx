@@ -11,6 +11,7 @@ export default function NotFoundScreen() {
         title="Not in the app yet"
         description="This page isn’t available in the app yet. You can open it on the Orbis website instead."
         webPath={pathname || '/'}
+        showHome
       />
     </Template.ScreenTemplate>
   );

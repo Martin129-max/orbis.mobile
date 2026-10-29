@@ -57,6 +57,7 @@ describe('app routes', () => {
     await renderRouter(routes, { initialUrl: '/requests' });
 
     expect(await screen.findByText('Not in the app yet')).toBeTruthy();
+    expect(screen.getByText('Back to Orbis')).toBeTruthy();
   });
 
   it('puts the tabs underneath a deep-linked screen so Back works', async () => {

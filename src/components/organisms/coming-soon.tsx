@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import * as Atom from '@atom';
@@ -9,10 +10,12 @@ export function ComingSoon({
   title,
   description,
   webPath,
+  showHome = false,
 }: {
   title: string;
   description: string;
   webPath: string;
+  showHome?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +36,9 @@ export function ComingSoon({
       <Atom.ThemedText type="subtitle">{title}</Atom.ThemedText>
       <Atom.ThemedText themeColor="textSecondary">{description}</Atom.ThemedText>
       <Atom.Button label="Open on the web" variant="secondary" onPress={openOnWeb} />
+      {showHome ? (
+        <Atom.Button label="Back to Orbis" variant="secondary" onPress={() => router.replace('/')} />
+      ) : null}
       {error ? <Atom.ErrorMessage>{error}</Atom.ErrorMessage> : null}
     </View>
   );
