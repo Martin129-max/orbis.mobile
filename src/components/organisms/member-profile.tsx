@@ -6,6 +6,7 @@ import {
   Image,
   ImageBackground,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,6 +28,7 @@ import {
   vote,
   type Clip,
   type FeedEntry,
+  type LibraryStatus,
   type ProfileImage,
   type PublicProfile,
 } from '@/lib/api';
@@ -42,6 +44,15 @@ const profileTabs = [
 
 type ProfileTab = (typeof profileTabs)[number]['value'];
 type ProfileState = { username: string; profile: PublicProfile | null; failed?: boolean };
+
+const libraryStatuses: LibraryStatus[] = ['current', 'completed', 'on_hold', 'dropped', 'planned'];
+const libraryStatusLabels: Record<LibraryStatus, string> = {
+  current: 'In progress',
+  completed: 'Completed',
+  on_hold: 'On hold',
+  dropped: 'Dropped',
+  planned: 'Planned',
+};
 
 function isProfileTab(value: string | undefined): value is ProfileTab {
   return profileTabs.some((tab) => tab.value === value);
@@ -75,7 +86,6 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const signedInProfile = useAuthStore((state) => state.profile);
   const logout = useAuthStore((state) => state.logout);
   const fetchCurrentProfile = useAuthStore((state) => state.fetchProfile);
-  const setAvatarUrl = useAuthStore((state) => state.setAvatarUrl);
   const theme = useTheme();
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const [loaded, setLoaded] = useState<ProfileState | null>(null);
@@ -86,6 +96,8 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const [contentLoading, setContentLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | 'all'>('all');
   const [pendingImage, setPendingImage] = useState<ProfileImage | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [profileAttempt, setProfileAttempt] = useState(0);
@@ -97,6 +109,8 @@ export function MemberProfile({ username: initialUsername }: { username?: string
       ? requestedTab
       : 'posts';
   const isSelf = Boolean(profile && signedInProfile?.userId === profile.userId);
+  const contentUsername = profile && !profile.restricted ? profile.username : null;
+  const hasClips = profile?.hasClips ?? false;
 
   function signOut() {
     logout();
@@ -126,10 +140,10 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   }, [profileAttempt, token, username]);
 
   useEffect(() => {
-    if (!profile || profile.restricted) return;
+    if (!contentUsername) return;
     if (activeTab === 'posts') {
       let active = true;
-      getUserPosts(token, profile.username)
+      getUserPosts(token, contentUsername)
         .then((page) => {
           if (!active) return;
           setPosts(page.items);
@@ -146,9 +160,9 @@ export function MemberProfile({ username: initialUsername }: { username?: string
       };
     }
 
-    if (activeTab === 'clips' && profile.hasClips) {
+    if (activeTab === 'clips' && hasClips) {
       let active = true;
-      getUserClips(token, profile.username)
+      getUserClips(token, contentUsername)
         .then((page) => {
           if (!active) return;
           setClips(page.items);
@@ -164,7 +178,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
         active = false;
       };
     }
-  }, [activeTab, loadAttempt, profile, token]);
+  }, [activeTab, contentUsername, hasClips, loadAttempt, token]);
 
   const imageChoices = useMemo(
     () => [
@@ -185,20 +199,34 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     router.setParams({ tab: tab === 'posts' ? undefined : tab });
   }, [activeTab]);
 
+  function showUpdatedImages(updated: Pick<PublicProfile, 'avatarUrl' | 'coverUrl' | 'backgroundUrl'>) {
+    setLoaded((current) =>
+      current?.profile
+        ? {
+            ...current,
+            profile: {
+              ...current.profile,
+              avatarUrl: updated.avatarUrl,
+              coverUrl: updated.coverUrl,
+              backgroundUrl: updated.backgroundUrl,
+            },
+          }
+        : current,
+    );
+    fetchCurrentProfile().catch(() => null);
+  }
+
   async function pickImage(type: ProfileImage, aspect?: [number, number]) {
     if (!token || pendingImage) return;
-    setError(null);
+    setImageError(null);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError('Allow photo library access in your device settings to choose a profile image.');
-        return;
-      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: Boolean(aspect),
         ...(aspect ? { aspect } : {}),
         quality: 1,
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (result.canceled) return;
       const image = result.assets[0];
@@ -214,60 +242,37 @@ export function MemberProfile({ username: initialUsername }: { username?: string
         image.fileName ?? null,
         image.mimeType ?? null,
       );
-      setLoaded((current) =>
-        current?.profile
-          ? {
-              ...current,
-              profile: {
-                ...current.profile,
-                avatarUrl: updated.avatarUrl,
-                coverUrl: updated.coverUrl,
-                backgroundUrl: updated.backgroundUrl,
-              },
-            }
-          : current,
-      );
-      if (type === 'avatar') setAvatarUrl(updated.avatarUrl);
+      showUpdatedImages(updated);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : `Could not upload your ${type}.`);
+      setImageError(cause instanceof Error ? cause.message : `Could not upload your ${type}.`);
     } finally {
       setPendingImage(null);
     }
   }
 
+  function removeImage(type: ProfileImage) {
+    if (!token) return;
+    setPendingImage(type);
+    setImageError(null);
+    removeProfileImage(token, type)
+      .then(showUpdatedImages)
+      .catch((cause: unknown) => {
+        setImageError(cause instanceof Error ? cause.message : `Could not remove your ${type}.`);
+      })
+      .finally(() => setPendingImage(null));
+  }
+
   function confirmRemoveImage(type: ProfileImage, label: string) {
     if (!token || pendingImage) return;
-    Alert.alert(`Remove ${label.toLowerCase()}?`, 'You can add another image at any time.', [
+    const title = `Remove ${label.toLowerCase()}?`;
+    const message = 'You can add another image at any time.';
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title} ${message}`)) removeImage(type);
+      return;
+    }
+    Alert.alert(title, message, [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          setPendingImage(type);
-          setError(null);
-          removeProfileImage(token, type)
-            .then((updated) => {
-              setLoaded((current) =>
-                current?.profile
-                  ? {
-                      ...current,
-                      profile: {
-                        ...current.profile,
-                        avatarUrl: updated.avatarUrl,
-                        coverUrl: updated.coverUrl,
-                        backgroundUrl: updated.backgroundUrl,
-                      },
-                    }
-                  : current,
-              );
-              if (type === 'avatar') setAvatarUrl(updated.avatarUrl);
-            })
-            .catch((cause: unknown) => {
-              setError(cause instanceof Error ? cause.message : `Could not remove your ${type}.`);
-            })
-            .finally(() => setPendingImage(null));
-        },
-      },
+      { text: 'Remove', style: 'destructive', onPress: () => removeImage(type) },
     ]);
   }
 
@@ -416,9 +421,11 @@ export function MemberProfile({ username: initialUsername }: { username?: string
           <Atom.ThemedText type="small" themeColor="textSecondary">
             {profile.isPublic ? 'Public profile' : 'Private profile'}
           </Atom.ThemedText>
-          <Atom.ThemedText type="small" themeColor="textSecondary">
-            {profile.postCount} posts · {profile.friendCount} friends · {profile.communityCount} communities
-          </Atom.ThemedText>
+          {profile.restricted ? null : (
+            <Atom.ThemedText type="small" themeColor="textSecondary">
+              {profile.postCount} posts · {profile.friendCount} friends · {profile.communityCount} communities
+            </Atom.ThemedText>
+          )}
         </View>
 
         {isSelf ? (
@@ -457,6 +464,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                 </View>
               ))}
             </View>
+            {imageError ? <Atom.ErrorMessage>{imageError}</Atom.ErrorMessage> : null}
           </View>
         ) : null}
 
@@ -516,7 +524,46 @@ export function MemberProfile({ username: initialUsername }: { username?: string
             ) : activeTab === 'library' ? (
               profile.library.length ? (
                 <View style={styles.list}>
-                  {profile.library.map((entry) => (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filters}>
+                    {(['all', ...libraryStatuses] as const)
+                      .filter(
+                        (value) =>
+                          value === 'all' || profile.library.some((entry) => entry.status === value),
+                      )
+                      .map((value) => {
+                        const selected = libraryStatus === value;
+                        const count =
+                          value === 'all'
+                            ? profile.library.length
+                            : profile.library.filter((entry) => entry.status === value).length;
+                        return (
+                          <Pressable
+                            key={value}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            onPress={() => setLibraryStatus(value)}
+                            style={[
+                              styles.filter,
+                              {
+                                borderColor: selected ? theme.accent : theme.divider,
+                                backgroundColor: selected ? theme.accentSoft : theme.surface,
+                              },
+                            ]}>
+                            <Atom.ThemedText
+                              type="small"
+                              style={{ color: selected ? theme.accent : theme.text }}>
+                              {value === 'all' ? 'All' : libraryStatusLabels[value]} · {count}
+                            </Atom.ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                  </ScrollView>
+                  {profile.library
+                    .filter((entry) => libraryStatus === 'all' || entry.status === libraryStatus)
+                    .map((entry) => (
                     <View key={entry.id} style={[styles.listCard, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
                       {entry.coverImage ? <Image source={{ uri: entry.coverImage }} style={styles.libraryCover} /> : null}
                       <View style={styles.itemBody}>
@@ -739,6 +786,16 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: Spacing.two,
+  },
+  filters: {
+    gap: Spacing.two,
+  },
+  filter: {
+    minHeight: 36,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: Spacing.three,
   },
   listCard: {
     flexDirection: 'row',

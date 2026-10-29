@@ -1,23 +1,14 @@
-import { StyleSheet, View } from 'react-native';
-import * as Atom from '@atom';
+import * as Organism from '@organism';
 import * as Template from '@template';
 
 export default function SearchScreen() {
   return (
     <Template.ScreenTemplate>
-      <View style={styles.page}>
-        <Atom.ThemedText type="subtitle">Search</Atom.ThemedText>
-        <Atom.ThemedText themeColor="textSecondary">
-          Search communities, people, and content from one place.
-        </Atom.ThemedText>
-      </View>
+      <Organism.ComingSoon
+        title="Search"
+        description="Search isn’t in the app yet. You can search Orbis on the website in the meantime."
+        webPath="/"
+      />
     </Template.ScreenTemplate>
   );
 }
-
-const styles = StyleSheet.create({
-  page: {
-    width: '100%',
-    gap: 12,
-  },
-});

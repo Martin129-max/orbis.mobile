@@ -4,21 +4,23 @@ import * as Atom from '@atom';
 import { API_URL, getServerStatus } from '@/lib/api';
 
 export function ServerStatus() {
-  const [status, setStatus] = useState<string | null>(null);
+  const [unreachable, setUnreachable] = useState(false);
 
   useEffect(() => {
     let current = true;
-    getServerStatus()
-      .then((text) => current && setStatus(text))
-      .catch(() => current && setStatus(`Server unreachable at ${API_URL}`));
+    getServerStatus().catch(() => current && setUnreachable(true));
     return () => {
       current = false;
     };
   }, []);
 
+  if (!unreachable) return null;
+
   return (
-    <Atom.ThemedText themeColor="textSecondary">
-      {status ?? 'Connecting to server…'}
-    </Atom.ThemedText>
+    <Atom.ErrorMessage>
+      {__DEV__
+        ? `Can't reach the Orbis server at ${API_URL}.`
+        : "Can't reach Orbis right now. Check your connection and try again."}
+    </Atom.ErrorMessage>
   );
 }

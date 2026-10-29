@@ -16,14 +16,6 @@ export const APP_ROUTES = {
   notification: (notificationId: number) => `/notifications/${notificationId}`,
 } as const;
 
-export const appRoutes = APP_ROUTES;
-export const routeMap = APP_ROUTES;
-export const deepLinkMap = {
-  community: APP_ROUTES.community,
-  user: APP_ROUTES.user,
-  notification: APP_ROUTES.notification,
-};
-
 export function safeNext(value: string | string[] | undefined): string | null {
   const next = Array.isArray(value) ? value[0] : value;
   if (
@@ -50,25 +42,22 @@ export function safeNext(value: string | string[] | undefined): string | null {
 export function pathWithQuery(
   pathname: string,
   params: Record<string, string | string[] | undefined>,
+  segments: readonly string[],
 ): string {
-  const pathSegments = pathname.split('/').map(decodePathSegment);
+  const routeKeys = new Set(
+    segments.flatMap((segment) => {
+      const match = /^\[(?:\.\.\.)?([^\]]+)\]$/.exec(segment);
+      return match ? [match[1]] : [];
+    }),
+  );
   const query = new URLSearchParams();
 
   for (const [key, value] of Object.entries(params)) {
+    if (routeKeys.has(key)) continue;
     const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
-    for (const item of values) {
-      if (!pathSegments.includes(item)) query.append(key, item);
-    }
+    for (const item of values) query.append(key, item);
   }
 
   const search = query.toString();
   return search ? `${pathname}?${search}` : pathname;
-}
-
-function decodePathSegment(segment: string): string {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
 }

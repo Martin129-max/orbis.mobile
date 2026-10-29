@@ -37,6 +37,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const theme = useTheme();
   const login = useAuthStore((state) => state.login);
   const signup = useAuthStore((state) => state.signup);
+  const sessionExpired = useAuthStore((state) => state.sessionExpired);
   const { next } = useLocalSearchParams<{ next?: string | string[] }>();
   const submitting = useRef(false);
   const request = useRef<AbortController | null>(null);
@@ -161,6 +162,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
             {description}
           </Atom.ThemedText>
         </View>
+        {mode === 'login' && sessionExpired && (
+          <Atom.ErrorMessage>Your session expired. Log in again to continue.</Atom.ErrorMessage>
+        )}
         {mode === 'login' ? (
           <View style={styles.fields}>
             <Molecule.FormField

@@ -24,6 +24,7 @@ import {
   type FeedEntry,
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+import { EmailConfirmNotice } from './email-confirm-notice';
 import { FeedCard } from './feed-card';
 
 function entryKey(item: FeedEntry) {
@@ -230,7 +231,9 @@ export function HomeFeed() {
           Posts and conversations from your communities.
         </Atom.ThemedText>
       </View>
-      {profile ? (
+      {profile && profile.emailVerifiedAt === null ? (
+        <EmailConfirmNotice email={profile.email} />
+      ) : profile ? (
         <View style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
           <Atom.ThemedText type="smallBold">Share an update</Atom.ThemedText>
           <Atom.Input

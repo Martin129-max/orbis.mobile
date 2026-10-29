@@ -140,7 +140,10 @@ export default function SettingsScreen() {
                     label="Disconnect"
                     variant="secondary"
                     loading={pending === connection.provider}
-                    disabled={pending !== null}
+                    disabled={
+                      pending !== null ||
+                      (!accounts.hasPassword && accounts.connections.length === 1)
+                    }
                     onPress={() => disconnect(connection.provider)}
                   />
                 </View>

@@ -1,6 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
-import * as Atom from '@atom';
+import * as Organism from '@organism';
 import * as Template from '@template';
 
 export default function CommunitySettingsScreen() {
@@ -8,19 +7,11 @@ export default function CommunitySettingsScreen() {
 
   return (
     <Template.ScreenTemplate>
-      <View style={styles.page}>
-        <Atom.ThemedText type="subtitle">Community settings #{communityId}</Atom.ThemedText>
-        <Atom.ThemedText themeColor="textSecondary">
-          Update roles, privacy, and community preferences here.
-        </Atom.ThemedText>
-      </View>
+      <Organism.ComingSoon
+        title="Community settings"
+        description="Community settings aren’t in the app yet. Owners and admins can change them on the Orbis website in the meantime."
+        webPath={`/communities/${encodeURIComponent(communityId ?? '')}/settings`}
+      />
     </Template.ScreenTemplate>
   );
 }
-
-const styles = StyleSheet.create({
-  page: {
-    width: '100%',
-    gap: 12,
-  },
-});

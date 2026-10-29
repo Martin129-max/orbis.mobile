@@ -13,6 +13,10 @@ export default function HomeScreen() {
   return (
     <Template.ScreenTemplate>
       <Atom.ThemedText type="title">Orbis</Atom.ThemedText>
+      <Atom.ThemedText themeColor="textSecondary">
+        A home for your fandoms. Join communities, share what you’re into, and keep track of what
+        you’re watching, reading, and playing.
+      </Atom.ThemedText>
       <Organism.ServerStatus />
       <Atom.Button label="Log in" onPress={() => router.push('/login')} />
       <Atom.Button

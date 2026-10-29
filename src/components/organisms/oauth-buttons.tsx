@@ -1,3 +1,4 @@
+import { router, type Href } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Atom from '@atom';
@@ -50,7 +51,11 @@ export function OAuthButtons({
     setPending(provider);
     setError(null);
     try {
-      await startOAuth(provider, token, target);
+      const callback = await startOAuth(provider, token, target);
+      if (callback) {
+        const query = new URLSearchParams(callback as Record<string, string>).toString();
+        router.replace(`/auth/callback?${query}` as Href);
+      }
     } catch (cause) {
       if (active.current) {
         setError(cause instanceof Error ? cause.message : 'Could not start provider authentication.');

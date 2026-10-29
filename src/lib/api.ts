@@ -51,6 +51,7 @@ export type Profile = {
   isPublic: boolean;
   isAdmin: boolean;
   isHeadAdmin: boolean;
+  emailVerifiedAt: string | null;
   createdAt: string;
 };
 
@@ -195,26 +196,18 @@ export type Activity = {
 
 export type FeedEntry = Post | Thread | Activity;
 
-export type NotificationItem = {
-  id: number;
-  type: 'like' | 'comment' | 'mention' | 'follow' | 'system';
-  readAt: string | null;
-  createdAt: string;
-  title: string;
-  body: string;
-  actor: Author | null;
-  targetUrl: string | null;
-};
-
-export type MessageThread = {
-  id: number;
-  user: Author;
-  preview: string;
-  updatedAt: string;
-  unreadCount: number;
-};
-
 export type Page<T> = { items: T[]; nextCursor: string | null };
+
+let unauthorizedHandler: ((token: string) => void) | null = null;
+
+export function setUnauthorizedHandler(handler: ((token: string) => void) | null) {
+  unauthorizedHandler = handler;
+}
+
+function bearerToken(headers: HeadersInit | undefined): string | null {
+  const value = new Headers(headers).get('Authorization');
+  return value?.startsWith('Bearer ') ? value.slice('Bearer '.length) : null;
+}
 
 export async function api(path: string, init?: RequestInit) {
   let res: Response;
@@ -228,6 +221,10 @@ export async function api(path: string, init?: RequestInit) {
   }
   if (res.status === 429) {
     throw new Error(await errorMessage(res, 'You’re doing that too often. Try again in a minute.'));
+  }
+  if (res.status === 401 && unauthorizedHandler) {
+    const token = bearerToken(init?.headers);
+    if (token) unauthorizedHandler(token);
   }
   return res;
 }
@@ -432,6 +429,15 @@ export async function getProfile(token: string): Promise<Profile | null> {
   return res.json();
 }
 
+export async function resendConfirmation(token: string): Promise<{ confirmed: boolean }> {
+  const res = await api('/auth/confirm-email/resend', {
+    method: 'POST',
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Couldn’t send the email.'));
+  return res.json();
+}
+
 export async function getPublicProfile(
   token: string | null,
   username: string,
@@ -518,19 +524,7 @@ export async function getServerStatus(): Promise<string> {
 
 export async function getCommunities(token: string): Promise<Community[]> {
   const res = await api('/communities', { headers: authHeaders(token) });
-  if (!res.ok) throw new Error('Could not load your communities.');
-  return res.json();
-}
-
-export async function getNotifications(token: string): Promise<NotificationItem[]> {
-  const res = await api('/notifications', { headers: authHeaders(token) });
-  if (!res.ok) throw new Error('Could not load your notifications.');
-  return res.json();
-}
-
-export async function getMessages(token: string): Promise<MessageThread[]> {
-  const res = await api('/messages', { headers: authHeaders(token) });
-  if (!res.ok) throw new Error('Could not load your messages.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your communities.'));
   return res.json();
 }
 
@@ -555,7 +549,7 @@ export async function searchCommunities(token: string, query: string): Promise<C
 export async function getFeed(token: string, cursor?: string): Promise<Page<FeedEntry>> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   const res = await api(`/feed${query}`, { headers: authHeaders(token) });
-  if (!res.ok) throw new Error('Could not load your feed.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your feed.'));
   return res.json();
 }
 
@@ -571,7 +565,7 @@ export async function createWallPost(
     body: JSON.stringify({ content, linkUrl }),
   });
   if (res.status === 400) throw new Error('Write something before posting.');
-  if (!res.ok) throw new Error('Could not post. Please try again.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not post. Please try again.'));
   return res.json();
 }
 
@@ -587,7 +581,7 @@ export async function createCommunityPost(
     body: JSON.stringify({ content, linkUrl }),
   });
   if (res.status === 400) throw new Error('Write something before posting.');
-  if (!res.ok) throw new Error('Could not post. Please try again.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not post. Please try again.'));
   return res.json();
 }
 
@@ -602,7 +596,7 @@ export async function setLike(
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, id, liked }),
   });
-  if (!res.ok) throw new Error('Could not save your like.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your like.'));
   return res.json();
 }
 
@@ -616,6 +610,6 @@ export async function vote(
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'thread', id, value }),
   });
-  if (!res.ok) throw new Error('Could not save your vote.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your vote.'));
   return res.json();
 }

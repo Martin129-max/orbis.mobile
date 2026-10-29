@@ -3,16 +3,19 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import * as api from '@/lib/api';
 import type { LoginCredentials, Profile, SignupDetails } from '@/lib/api';
+import { clearOAuthState } from '@/lib/oauth';
 import { secureStorage } from '@/lib/storage';
 
 type AuthState = {
   token: string | null;
   profile: Profile | null;
+  sessionExpired: boolean;
   login: (credentials: LoginCredentials, signal?: AbortSignal) => Promise<void>;
   loginWithToken: (token: string) => void;
   setAvatarUrl: (avatarUrl: string | null) => void;
   signup: (details: SignupDetails, signal?: AbortSignal) => Promise<void>;
   logout: () => void;
+  expireSession: (token: string) => void;
   fetchProfile: () => Promise<Profile | null>;
 };
 
@@ -21,11 +24,13 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       token: null,
       profile: null,
+      sessionExpired: false,
       login: async (credentials, signal) => {
-        set({ token: await api.login(credentials, signal), profile: null });
+        const token = await api.login(credentials, signal);
+        set({ token, profile: null, sessionExpired: false });
       },
       loginWithToken: (token) => {
-        set({ token, profile: null });
+        set({ token, profile: null, sessionExpired: false });
       },
       setAvatarUrl: (avatarUrl) => {
         set((state) =>
@@ -33,9 +38,18 @@ export const useAuthStore = create<AuthState>()(
         );
       },
       signup: async (details, signal) => {
-        set({ token: await api.signup(details, signal), profile: null });
+        const token = await api.signup(details, signal);
+        set({ token, profile: null, sessionExpired: false });
       },
-      logout: () => set({ token: null, profile: null }),
+      logout: () => {
+        set({ token: null, profile: null, sessionExpired: false });
+        void clearOAuthState();
+      },
+      expireSession: (token) => {
+        if (get().token !== token) return;
+        set({ token: null, profile: null, sessionExpired: true });
+        void clearOAuthState();
+      },
       fetchProfile: async () => {
         const { token } = get();
 
@@ -45,10 +59,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const profile = await api.getProfile(token);
-        if (!profile) {
-          get().logout();
-          return null;
-        }
+        if (!profile || get().token !== token) return null;
 
         set({ profile });
         return profile;
@@ -61,6 +72,8 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+api.setUnauthorizedHandler((token) => useAuthStore.getState().expireSession(token));
 
 export function useAuthHydrated() {
   return useSyncExternalStore(

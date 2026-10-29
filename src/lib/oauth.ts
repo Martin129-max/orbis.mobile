@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
 import {
   getOAuthUrl,
@@ -13,6 +14,8 @@ import { secureStorage } from '@/lib/storage';
 const PENDING_OAUTH_KEY = 'oauth-pending-v1';
 const PENDING_SIGNUP_KEY = 'oauth-signup-v1';
 const PENDING_AVATAR_KEY = 'oauth-avatar-v1';
+const PENDING_OAUTH_TTL_MS = 10 * 60 * 1000;
+const CALLBACK_PARAMS = ['provider', 'code', 'state', 'error', 'error_description'] as const;
 let takingPendingOAuth = false;
 
 export type PendingOAuth = {
@@ -20,7 +23,10 @@ export type PendingOAuth = {
   nonce: string;
   token: string | null;
   destination: string;
+  startedAt: number;
 };
+
+export type OAuthCallbackParams = Partial<Record<(typeof CALLBACK_PARAMS)[number], string>>;
 
 export type PendingOAuthAvatar = {
   provider: OAuthProvider;
@@ -46,15 +52,26 @@ function isPendingOAuth(value: unknown): value is PendingOAuth {
     /^[a-f0-9]{64}$/.test(pending.nonce) &&
     (typeof pending.token === 'string' || pending.token === null) &&
     typeof pending.destination === 'string' &&
-    pending.destination.startsWith('/')
+    pending.destination.startsWith('/') &&
+    typeof pending.startedAt === 'number'
   );
+}
+
+export function callbackParams(url: string): OAuthCallbackParams {
+  const query = new URL(url).searchParams;
+  const params: OAuthCallbackParams = {};
+  for (const key of CALLBACK_PARAMS) {
+    const value = query.get(key);
+    if (value !== null) params[key] = value;
+  }
+  return params;
 }
 
 export async function startOAuth(
   provider: OAuthProvider,
   token: string | null,
   destination: string,
-) {
+): Promise<OAuthCallbackParams | null> {
   const randomBytes = await Crypto.getRandomBytesAsync(32);
   const nonce = Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
   const safeDestination = safeNext(destination);
@@ -66,6 +83,7 @@ export async function startOAuth(
       safeDestination && safeDestination.length <= 512
         ? safeDestination
         : '/(protected)/(tabs)',
+    startedAt: Date.now(),
   };
   await secureStorage.removeItem(PENDING_SIGNUP_KEY);
   await secureStorage.setItem(PENDING_OAUTH_KEY, JSON.stringify(pending));
@@ -76,9 +94,10 @@ export async function startOAuth(
       url,
       Linking.createURL('auth/callback'),
     );
-    if (result.type !== 'success') {
-      await clearPendingOAuth();
-    }
+    if (Platform.OS === 'android') return null;
+    if (result.type === 'success') return callbackParams(result.url);
+    await clearPendingOAuth();
+    return null;
   } catch (error) {
     await clearPendingOAuth();
     throw error;
@@ -102,6 +121,9 @@ export async function takePendingOAuth(): Promise<PendingOAuth | null> {
     if (!isPendingOAuth(pending)) {
       throw new Error('The saved sign-in attempt is invalid. Please try again.');
     }
+    if (Date.now() - pending.startedAt > PENDING_OAUTH_TTL_MS) {
+      throw new Error('This sign-in attempt has expired. Please try again.');
+    }
     return pending;
   } finally {
     takingPendingOAuth = false;
@@ -110,6 +132,14 @@ export async function takePendingOAuth(): Promise<PendingOAuth | null> {
 
 export async function clearPendingOAuth() {
   await secureStorage.removeItem(PENDING_OAUTH_KEY);
+}
+
+export async function clearOAuthState() {
+  await Promise.all(
+    [PENDING_OAUTH_KEY, PENDING_SIGNUP_KEY, PENDING_AVATAR_KEY].map((key) =>
+      secureStorage.removeItem(key),
+    ),
+  );
 }
 
 export async function savePendingOAuthSignup(signup: OAuthSignupDetails) {
