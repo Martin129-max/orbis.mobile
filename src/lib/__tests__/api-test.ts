@@ -1,4 +1,12 @@
-import { api, createWallPost, getProfile, login, setUnauthorizedHandler } from '../api';
+import {
+  api,
+  createWallPost,
+  getCommunity,
+  getProfile,
+  getUserPosts,
+  login,
+  setUnauthorizedHandler,
+} from '../api';
 
 function respond(status: number, body: unknown) {
   return Promise.resolve(
@@ -66,5 +74,23 @@ describe('api requests', () => {
     await expect(createWallPost('token', 'naruto', 'Free episodes https://spam.test')).rejects.toThrow(
       'New accounts can post links after their first day. Try again in about 5 hours.',
     );
+  });
+
+  it('asks the server to leave out hidden kinds of posts, like web', async () => {
+    fetchMock.mockReturnValue(respond(200, { items: [], nextCursor: null }));
+
+    await getUserPosts(null, 'naruto', 'next-page', ['thread', 'activity']);
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(
+      /\/users\/naruto\/posts\?cursor=next-page&exclude=thread%2Cactivity$/,
+    );
+  });
+
+  it('treats a hidden community as no access but reports outages', async () => {
+    fetchMock.mockReturnValueOnce(respond(404, { message: 'Not Found' }));
+    await expect(getCommunity('token', '5')).resolves.toBeNull();
+
+    fetchMock.mockReturnValueOnce(respond(500, { message: 'Internal server error' }));
+    await expect(getCommunity('token', '5')).rejects.toThrow();
   });
 });

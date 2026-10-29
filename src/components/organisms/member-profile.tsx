@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
   ImageBackground,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -27,6 +27,7 @@ import {
   uploadProfileImage,
   vote,
   type Clip,
+  type FeedContentType,
   type FeedEntry,
   type LibraryStatus,
   type ProfileImage,
@@ -41,6 +42,12 @@ const profileTabs = [
   { value: 'communities', label: 'Communities' },
   { value: 'clips', label: 'Clips' },
 ] as const;
+
+const postTypes: { value: FeedContentType; label: string }[] = [
+  { value: 'post', label: 'Posts' },
+  { value: 'thread', label: 'Threads' },
+  { value: 'activity', label: 'Library updates' },
+];
 
 type ProfileTab = (typeof profileTabs)[number]['value'];
 type ProfileState = { username: string; profile: PublicProfile | null; failed?: boolean };
@@ -98,6 +105,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | 'all'>('all');
+  const [hiddenTypes, setHiddenTypes] = useState<FeedContentType[]>([]);
   const [pendingImage, setPendingImage] = useState<ProfileImage | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [profileAttempt, setProfileAttempt] = useState(0);
@@ -143,7 +151,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     if (!contentUsername) return;
     if (activeTab === 'posts') {
       let active = true;
-      getUserPosts(token, contentUsername)
+      getUserPosts(token, contentUsername, undefined, hiddenTypes)
         .then((page) => {
           if (!active) return;
           setPosts(page.items);
@@ -178,7 +186,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
         active = false;
       };
     }
-  }, [activeTab, contentUsername, hasClips, loadAttempt, token]);
+  }, [activeTab, contentUsername, hasClips, hiddenTypes, loadAttempt, token]);
 
   const imageChoices = useMemo(
     () => [
@@ -198,6 +206,16 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     }
     router.setParams({ tab: tab === 'posts' ? undefined : tab });
   }, [activeTab]);
+
+  function togglePostType(type: FeedContentType) {
+    const hidden = hiddenTypes.includes(type)
+      ? hiddenTypes.filter((value) => value !== type)
+      : [...hiddenTypes, type];
+    if (hidden.length === postTypes.length) return;
+    setError(null);
+    setContentLoading(true);
+    setHiddenTypes(hidden);
+  }
 
   function showUpdatedImages(updated: Pick<PublicProfile, 'avatarUrl' | 'coverUrl' | 'backgroundUrl'>) {
     setLoaded((current) =>
@@ -284,7 +302,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     setError(null);
     try {
       if (activeTab === 'posts') {
-        const page = await getUserPosts(token, profile.username, cursor);
+        const page = await getUserPosts(token, profile.username, cursor, hiddenTypes);
         setPosts((current) => [...current, ...page.items]);
         setPostCursor(page.nextCursor);
       } else if (activeTab === 'clips') {
@@ -301,7 +319,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
 
   async function openClip(url: string) {
     try {
-      await Linking.openURL(url);
+      await WebBrowser.openBrowserAsync(url);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not open this Twitch clip.');
     }
@@ -503,6 +521,38 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                 ))}
             </ScrollView>
 
+            {activeTab === 'posts' ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filters}>
+                {postTypes.map(({ value, label }) => {
+                  const shown = !hiddenTypes.includes(value);
+                  const locked = moreLoading || (shown && hiddenTypes.length === postTypes.length - 1);
+                  return (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: shown, disabled: locked }}
+                      disabled={locked}
+                      onPress={() => togglePostType(value)}
+                      style={[
+                        styles.filter,
+                        {
+                          borderColor: shown ? theme.accent : theme.divider,
+                          backgroundColor: shown ? theme.accentSoft : theme.surface,
+                        },
+                      ]}>
+                      <Atom.ThemedText
+                        type="small"
+                        style={{ color: shown ? theme.accent : theme.text }}>
+                        {label}
+                      </Atom.ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
             {error ? <Atom.ErrorMessage>{error}</Atom.ErrorMessage> : null}
             {contentLoading && (activeTab === 'posts' || activeTab === 'clips') ? (
               <View style={styles.centered}><Atom.ThemedText themeColor="textSecondary">Loading…</Atom.ThemedText></View>
@@ -519,7 +569,14 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                   ))}
                 </View>
               ) : (
-                <ProfileEmpty title="Nothing here yet." body={`${name}’s posts and shared activity will appear here.`} />
+                hiddenTypes.length ? (
+                  <ProfileEmpty
+                    title="Nothing matches these filters."
+                    body={`Turn on more kinds of posts to see more from ${name}.`}
+                  />
+                ) : (
+                  <ProfileEmpty title="Nothing here yet." body={`${name}’s posts and shared activity will appear here.`} />
+                )
               )
             ) : activeTab === 'library' ? (
               profile.library.length ? (

@@ -19,6 +19,8 @@ const titles: Record<string, string> = {
   notifications: 'Notifications',
   'notifications/[notificationId]': 'Notification',
   settings: 'Settings',
+  directory: 'Directory',
+  reports: 'Reports',
   'users/[username]': 'Profile',
   'communities/[communityId]': 'Community',
   'communities/[communityId]/settings': 'Community settings',

@@ -1,3 +1,4 @@
+export * from './access-gate';
 export * from './auth-form';
 export * from './coming-soon';
 export * from './email-confirm-notice';

@@ -55,10 +55,13 @@ export type Profile = {
   createdAt: string;
 };
 
+export type CommunityRole = 'owner' | 'admin' | 'member';
+
 export type Community = {
   id: number;
   name: string;
   iconUrl: string | null;
+  role?: CommunityRole | null;
 };
 
 export type Author = {
@@ -195,6 +198,8 @@ export type Activity = {
 };
 
 export type FeedEntry = Post | Thread | Activity;
+
+export type FeedContentType = FeedEntry['type'];
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
@@ -454,8 +459,13 @@ export async function getUserPosts(
   token: string | null,
   username: string,
   cursor?: string,
+  excludedTypes: FeedContentType[] = [],
 ): Promise<Page<FeedEntry>> {
-  const query = cursor ? `?${new URLSearchParams({ cursor })}` : '';
+  const params: Record<string, string> = {};
+  if (cursor) params.cursor = cursor;
+  if (excludedTypes.length) params.exclude = excludedTypes.join(',');
+  const search = new URLSearchParams(params).toString();
+  const query = search ? `?${search}` : '';
   const res = await api(`/users/${encodeURIComponent(username)}/posts${query}`, {
     headers: authHeaders(token),
   });
@@ -526,6 +536,17 @@ export async function getCommunities(token: string): Promise<Community[]> {
   const res = await api('/communities', { headers: authHeaders(token) });
   if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your communities.'));
   return res.json();
+}
+
+export async function getCommunity(token: string, id: string): Promise<Community | null> {
+  const res = await api(`/communities/${encodeURIComponent(id)}`, { headers: authHeaders(token) });
+  if (res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load this community.'));
+  return res.json();
+}
+
+export function canManage(community: Community) {
+  return community.role === 'owner' || community.role === 'admin';
 }
 
 export async function searchPeople(token: string, query: string): Promise<Author[]> {
