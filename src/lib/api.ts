@@ -163,21 +163,6 @@ export type Clip = {
 
 export type ClipPage = { items: Clip[]; nextCursor: string | null };
 
-export type Thread = {
-  type: 'thread';
-  id: number;
-  communityId: number;
-  title: string;
-  content: string;
-  linkUrl: string | null;
-  score: number;
-  commentCount: number;
-  myVote: number;
-  createdAt: string;
-  author: Author;
-  community: CommunitySummary;
-};
-
 export type Activity = {
   type: 'activity';
   id: number;
@@ -197,7 +182,7 @@ export type Activity = {
   };
 };
 
-export type FeedEntry = Post | Thread | Activity;
+export type FeedEntry = Post | Activity;
 
 export type FeedContentType = FeedEntry['type'];
 
@@ -618,19 +603,5 @@ export async function setLike(
     body: JSON.stringify({ type, id, liked }),
   });
   if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your like.'));
-  return res.json();
-}
-
-export async function vote(
-  token: string,
-  id: number,
-  value: -1 | 0 | 1,
-): Promise<{ score: number; myVote: number }> {
-  const res = await api('/votes', {
-    method: 'PUT',
-    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'thread', id, value }),
-  });
-  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your vote.'));
   return res.json();
 }
