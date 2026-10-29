@@ -33,10 +33,14 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.1.0",
+    "@types/jest": "30.0.0",
     "@types/react": "~19.3.0",
     "eas-cli": "^25.3.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
+    "jest": "~30.5.2",
+    "jest-expo": "58.0.12",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -45,7 +49,22 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "test": "jest",
     "deploy": "bash ./scripts/deployment/deploy.sh"
   },
-  "private": true
+  "private": true,
+  "jest": {
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!(.pnpm|(jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|standard-navigation))"
+    ],
+    "moduleNameMapper": {
+      "\\.css$": "<rootDir>/test/style-mock.js",
+      "^@/(.*)$": "<rootDir>/src/$1",
+      "^@atom$": "<rootDir>/src/components/atoms",
+      "^@molecule$": "<rootDir>/src/components/molecules",
+      "^@organism$": "<rootDir>/src/components/organisms",
+      "^@template$": "<rootDir>/src/components/templates"
+    }
+  }
 }
