@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import * as Atom from '@atom';
@@ -31,7 +31,11 @@ export default function ProfileScreen() {
   return (
     <Template.ScreenTemplate>
       {profile ? (
-        <Organism.ProfileCard profile={profile} onLogout={handleLogout} />
+        <Organism.ProfileCard
+          profile={profile}
+          onLogout={handleLogout}
+          onSettings={() => router.push('/settings' as Href)}
+        />
       ) : error ? (
         <View style={{ width: '100%', gap: 16 }}>
           <Atom.ErrorMessage>{error}</Atom.ErrorMessage>

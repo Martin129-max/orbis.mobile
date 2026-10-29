@@ -13,6 +13,31 @@ export const WEB_URL = (
 export type LoginCredentials = { identifier: string; password: string };
 
 export type SignupDetails = { email: string; username: string; password: string };
+export type OAuthProvider = 'discord' | 'twitch';
+export type OAuthConnection = {
+  provider: OAuthProvider;
+  username: string;
+  showLive: boolean;
+  connectedAt: string;
+};
+export type OAuthConnections = {
+  hasPassword: boolean;
+  connections: OAuthConnection[];
+};
+export type OAuthResult =
+  | { access_token: string }
+  | { signup: { token: string; username: string; avatarUrl: string | null } }
+  | {
+      linked: OAuthProvider;
+      communityId?: number;
+      avatar?: { url: string; token: string };
+    };
+export type OAuthSignupDetails = {
+  provider: OAuthProvider;
+  token: string;
+  username: string;
+  avatarUrl: string | null;
+};
 
 export type Profile = {
   userId: number;
@@ -212,6 +237,115 @@ export function signup(details: SignupDetails, signal?: AbortSignal) {
 
 export function login(credentials: LoginCredentials, signal?: AbortSignal) {
   return authenticate('/auth/login', credentials, signal);
+}
+
+export async function getOAuthProviders(): Promise<OAuthProvider[]> {
+  const res = await api('/auth/oauth/providers');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load sign-in providers.'));
+  return res.json();
+}
+
+export async function getOAuthUrl(
+  provider: OAuthProvider,
+  nonce: string,
+  token?: string,
+): Promise<string> {
+  const params = new URLSearchParams({ nonce, client: 'mobile' });
+  const path = token ? 'link-url' : 'url';
+  const res = await api(`/auth/oauth/${provider}/${path}?${params.toString()}`, {
+    headers: authHeaders(token ?? null),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not start provider authentication.'));
+  }
+  const body: unknown = await res.json();
+  if (!body || typeof body !== 'object' || !('url' in body) || typeof body.url !== 'string') {
+    throw new Error('The server returned an invalid provider authorization URL.');
+  }
+  return body.url;
+}
+
+export async function completeOAuth(
+  provider: OAuthProvider,
+  body: { code: string; state: string; nonce: string },
+  token: string | null,
+): Promise<OAuthResult> {
+  const res = await api(`/auth/oauth/${provider}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not finish provider authentication.'));
+  }
+  return res.json();
+}
+
+export async function finishOAuthSignup(
+  token: string,
+  username: string,
+  useProviderAvatar: boolean,
+): Promise<{ access_token: string }> {
+  const res = await api('/auth/oauth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, username, useProviderAvatar }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not finish creating your account.'));
+  }
+  return res.json();
+}
+
+export async function applyLinkedOAuthAvatar(
+  token: string,
+  avatarToken: string,
+): Promise<{ avatarUrl: string }> {
+  const res = await api('/auth/oauth/avatar', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: avatarToken }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not use your provider avatar.'));
+  }
+  return res.json();
+}
+
+export async function getOAuthConnections(token: string): Promise<OAuthConnections> {
+  const res = await api('/auth/oauth/connections', { headers: authHeaders(token) });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not load your connected accounts.'));
+  }
+  return res.json();
+}
+
+export async function disconnectOAuth(token: string, provider: OAuthProvider): Promise<void> {
+  const res = await api(`/auth/oauth/connections/${provider}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not disconnect this account.'));
+  }
+}
+
+export async function setShowLive(
+  token: string,
+  provider: OAuthProvider,
+  showLive: boolean,
+): Promise<void> {
+  const res = await api(`/auth/oauth/connections/${provider}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ showLive }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not update this setting.'));
+  }
 }
 
 export async function getProfile(token: string): Promise<Profile | null> {

@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { WEB_URL } from '@/lib/api';
 import { safeNext } from '@/lib/navigation';
 import { useAuthStore } from '@/stores/auth-store';
+import { OAuthButtons } from './oauth-buttons';
 
 type Mode = 'login' | 'signup';
 
@@ -268,6 +269,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         )}
         {legalError && <Atom.ErrorMessage>{legalError}</Atom.ErrorMessage>}
         <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+        <OAuthButtons destination={returnTo} />
         <Atom.ThemedText type="small" themeColor="textSecondary">
           {switchText}{' '}
           <Link

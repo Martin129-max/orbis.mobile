@@ -9,6 +9,8 @@ type AuthState = {
   token: string | null;
   profile: Profile | null;
   login: (credentials: LoginCredentials, signal?: AbortSignal) => Promise<void>;
+  loginWithToken: (token: string) => void;
+  setAvatarUrl: (avatarUrl: string) => void;
   signup: (details: SignupDetails, signal?: AbortSignal) => Promise<void>;
   logout: () => void;
   fetchProfile: () => Promise<Profile | null>;
@@ -20,10 +22,18 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       profile: null,
       login: async (credentials, signal) => {
-        set({ token: await api.login(credentials, signal) });
+        set({ token: await api.login(credentials, signal), profile: null });
+      },
+      loginWithToken: (token) => {
+        set({ token, profile: null });
+      },
+      setAvatarUrl: (avatarUrl) => {
+        set((state) =>
+          state.profile ? { profile: { ...state.profile, avatarUrl } } : state,
+        );
       },
       signup: async (details, signal) => {
-        set({ token: await api.signup(details, signal) });
+        set({ token: await api.signup(details, signal), profile: null });
       },
       logout: () => set({ token: null, profile: null }),
       fetchProfile: async () => {

@@ -7,9 +7,10 @@ import type { Profile } from '@/lib/api';
 type ProfileCardProps = {
   profile: Profile;
   onLogout: () => void;
+  onSettings: () => void;
 };
 
-export function ProfileCard({ profile, onLogout }: ProfileCardProps) {
+export function ProfileCard({ profile, onLogout, onSettings }: ProfileCardProps) {
   return (
     <View style={styles.card}>
       <Atom.ThemedText type="subtitle">@{profile.username}</Atom.ThemedText>
@@ -18,6 +19,7 @@ export function ProfileCard({ profile, onLogout }: ProfileCardProps) {
         User #{profile.userId}
         {profile.isPublic ? ' · Public profile' : ' · Private profile'}
       </Atom.ThemedText>
+      <Atom.Button label="Account settings" variant="secondary" onPress={onSettings} />
       <Atom.Button label="Log out" variant="secondary" onPress={onLogout} />
     </View>
   );
