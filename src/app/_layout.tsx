@@ -1,4 +1,10 @@
-import { DarkTheme, DefaultTheme, SplashScreen, Stack, ThemeProvider } from 'expo-router';
+import {
+  DarkTheme,
+  DefaultTheme,
+  SplashScreen,
+  Stack,
+  ThemeProvider,
+} from 'expo-router';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
@@ -25,16 +31,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
         </Stack.Protected>
-        <Stack.Protected guard={signedIn}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="search" />
-          <Stack.Screen name="notifications" />
-          <Stack.Screen name="notifications/[notificationId]" />
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="communities/[communityId]" />
-          <Stack.Screen name="communities/[communityId]/settings" />
-          <Stack.Screen name="users/[username]" />
-        </Stack.Protected>
+        <Stack.Screen name="(protected)" />
       </Stack>
     </ThemeProvider>
   );

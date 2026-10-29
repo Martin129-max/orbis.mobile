@@ -2,12 +2,12 @@ export const APP_ROUTES = {
   home: '/',
   login: '/login',
   register: '/register',
-  tabs: '/(tabs)',
-  homeTab: '/(tabs)/index',
-  communitiesTab: '/(tabs)/communities',
-  libraryTab: '/(tabs)/library',
-  messagesTab: '/(tabs)/messages',
-  profileTab: '/(tabs)/profile',
+  tabs: '/(protected)/(tabs)',
+  homeTab: '/(protected)/(tabs)/index',
+  communitiesTab: '/(protected)/(tabs)/communities',
+  libraryTab: '/(protected)/(tabs)/library',
+  messagesTab: '/(protected)/(tabs)/messages',
+  profileTab: '/(protected)/(tabs)/profile',
   search: '/search',
   notifications: '/notifications',
   settings: '/settings',
@@ -23,3 +23,52 @@ export const deepLinkMap = {
   user: APP_ROUTES.user,
   notification: APP_ROUTES.notification,
 };
+
+export function safeNext(value: string | string[] | undefined): string | null {
+  const next = Array.isArray(value) ? value[0] : value;
+  if (
+    !next ||
+    next.length > 2048 ||
+    !next.startsWith('/') ||
+    next.startsWith('//') ||
+    next.includes('\\') ||
+    /[\u0000-\u001f]/.test(next)
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(next, 'https://orbis.invalid');
+    if (url.origin !== 'https://orbis.invalid') return null;
+    if (url.pathname === '/login' || url.pathname === '/register') return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+export function pathWithQuery(
+  pathname: string,
+  params: Record<string, string | string[] | undefined>,
+): string {
+  const pathSegments = pathname.split('/').map(decodePathSegment);
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
+    for (const item of values) {
+      if (!pathSegments.includes(item)) query.append(key, item);
+    }
+  }
+
+  const search = query.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
