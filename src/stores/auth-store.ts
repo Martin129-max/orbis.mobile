@@ -27,13 +27,21 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: () => set({ token: null, profile: null }),
       fetchProfile: async () => {
-        const { token, logout } = get();
-        const profile = token ? await api.getProfile(token) : null;
+        const { token } = get();
 
-        if (profile) set({ profile });
-        else logout();
+        if (!token) {
+          set({ profile: null });
+          return null;
+        }
 
-        return profile;
+        try {
+          const profile = await api.getProfile(token);
+          set({ profile: profile ?? null });
+          return profile;
+        } catch {
+          set({ profile: null });
+          return null;
+        }
       },
     }),
     {
