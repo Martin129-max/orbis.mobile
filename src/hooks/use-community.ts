@@ -9,7 +9,7 @@ export function useCommunity(communityId: string) {
   const token = useAuthStore((state) => state.token);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const key = `${communityId}:${attempt}`;
+  const key = `${token ?? ''}:${communityId}:${attempt}`;
 
   useEffect(() => {
     if (!token) return;
