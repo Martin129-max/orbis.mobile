@@ -1,3 +1,4 @@
+import { router, type Href } from 'expo-router';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Atom from '@atom';
 
@@ -67,7 +68,11 @@ export function FeedCard({ item, onLike, onVote }: FeedCardProps) {
 
   return (
     <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
-      <View style={styles.authorRow}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`View ${displayName}’s profile`}
+        onPress={() => router.push(`/users/${encodeURIComponent(author.username)}` as Href)}
+        style={styles.authorRow}>
         {author.avatarUrl ? (
           <Image source={{ uri: author.avatarUrl }} style={styles.avatar} />
         ) : (
@@ -98,7 +103,7 @@ export function FeedCard({ item, onLike, onVote }: FeedCardProps) {
             Library
           </Atom.ThemedText>
         )}
-      </View>
+      </Pressable>
 
       {item.type === 'thread' ? (
         <View style={styles.body}>

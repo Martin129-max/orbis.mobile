@@ -18,25 +18,16 @@ export default function ProfileScreen() {
       .then((result) => {
         if (!result) router.replace('/');
       })
-      .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : 'Could not load your profile.');
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : 'Could not load your profile.');
       });
   }, [fetchProfile]);
 
-  function handleLogout() {
-    logout();
-    router.replace('/');
-  }
+  if (profile) return <Organism.MemberProfile username={profile.username} />;
 
   return (
     <Template.ScreenTemplate>
-      {profile ? (
-        <Organism.ProfileCard
-          profile={profile}
-          onLogout={handleLogout}
-          onSettings={() => router.push('/settings' as Href)}
-        />
-      ) : error ? (
+      {error ? (
         <View style={{ width: '100%', gap: 16 }}>
           <Atom.ErrorMessage>{error}</Atom.ErrorMessage>
           <Atom.Button
@@ -44,15 +35,26 @@ export default function ProfileScreen() {
             variant="secondary"
             onPress={() => {
               setError(null);
-              fetchProfile().catch((reason: unknown) => {
-                setError(reason instanceof Error ? reason.message : 'Could not load your profile.');
+              fetchProfile().catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : 'Could not load your profile.');
               });
             }}
           />
+          <Atom.Button
+            label="Account settings"
+            variant="secondary"
+            onPress={() => router.push('/settings' as Href)}
+          />
+          <Atom.Button
+            label="Log out"
+            variant="secondary"
+            onPress={() => {
+              logout();
+              router.replace('/');
+            }}
+          />
         </View>
-      ) : (
-        <ActivityIndicator />
-      )}
+      ) : <ActivityIndicator />}
     </Template.ScreenTemplate>
   );
 }

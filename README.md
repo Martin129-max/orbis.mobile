@@ -10,6 +10,8 @@ The app finds the server on the computer running Expo automatically. To use anot
 
 Discord and Twitch provider redirect URLs should continue to target the server's `WEB_URL` callbacks (`/auth/discord/callback` and `/auth/twitch/callback`). Those web callbacks return the authorization code and signed state to the app's `orbis` deep link; provider access tokens are exchanged by the server and are not placed in the deep link.
 
+Profile pictures, covers, and wallpapers can be changed from the Profile tab. The system photo picker requests access only when an image is selected; uploads use the existing server image endpoints and shared storage.
+
 ## Deploying
 `pnpm run deploy` publishes an over-the-air update with EAS Update. Before the first deploy, run once in this folder:
 

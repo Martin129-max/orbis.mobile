@@ -85,6 +85,80 @@ export type Post = {
   wallUser: Author | null;
 };
 
+export type PresenceStatus = 'online' | 'idle' | 'busy' | 'streaming' | 'offline';
+export type LibraryStatus = 'current' | 'completed' | 'on_hold' | 'dropped' | 'planned';
+export type MediaType = 'anime' | 'manga' | 'game';
+
+export type PublicProfile = {
+  userId: number;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  backgroundUrl: string | null;
+  isAdmin: boolean;
+  isHeadAdmin: boolean;
+  isVerified: boolean;
+  isPublic: boolean;
+  restricted: boolean;
+  hasClips: boolean;
+  createdAt: string;
+  online: boolean;
+  status: PresenceStatus;
+  friendCount: number;
+  postCount: number;
+  communityCount: number;
+  communities: {
+    id: number;
+    name: string;
+    iconUrl: string | null;
+    coverUrl: string | null;
+    isVerified: boolean;
+    memberCount: number;
+    isOwner: boolean;
+  }[];
+  friends: {
+    userId: number;
+    username: string;
+    name: string | null;
+    avatarUrl: string | null;
+    coverUrl: string | null;
+    isVerified: boolean;
+    online: boolean;
+    status: PresenceStatus;
+    playing: string | null;
+  }[];
+  library: {
+    id: number;
+    mediaType: MediaType;
+    sourceId: string;
+    title: string;
+    coverImage: string | null;
+    status: LibraryStatus;
+    progress: number;
+    total: number | null;
+    steam: {
+      appId: string;
+      minutes: number;
+      steamId: string;
+      achievements: { achieved: number; total: number } | null;
+    } | null;
+  }[];
+};
+
+export type Clip = {
+  id: string;
+  title: string;
+  url: string;
+  thumbnailUrl: string;
+  viewCount: number;
+  duration: number;
+  creatorName: string;
+  createdAt: string;
+};
+
+export type ClipPage = { items: Clip[]; nextCursor: string | null };
+
 export type Thread = {
   type: 'thread';
   id: number;
@@ -355,6 +429,85 @@ export async function getProfile(token: string): Promise<Profile | null> {
   if (res.status === 403) throw new Error('You can’t access this profile.');
   if (res.status === 404) throw new Error('Your profile could not be found.');
   if (!res.ok) throw new Error('Could not load your profile. Please try again.');
+  return res.json();
+}
+
+export async function getPublicProfile(
+  token: string | null,
+  username: string,
+): Promise<PublicProfile | null> {
+  const res = await api(`/users/${encodeURIComponent(username)}`, {
+    headers: authHeaders(token),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load this profile.'));
+  return res.json();
+}
+
+export async function getUserPosts(
+  token: string | null,
+  username: string,
+  cursor?: string,
+): Promise<Page<FeedEntry>> {
+  const query = cursor ? `?${new URLSearchParams({ cursor })}` : '';
+  const res = await api(`/users/${encodeURIComponent(username)}/posts${query}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load these posts.'));
+  return res.json();
+}
+
+export async function getUserClips(
+  token: string | null,
+  username: string,
+  cursor?: string,
+): Promise<ClipPage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor })}` : '';
+  const res = await api(`/users/${encodeURIComponent(username)}/clips${query}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load these clips.'));
+  return res.json();
+}
+
+export type ProfileImage = 'avatar' | 'cover' | 'background';
+
+export async function uploadProfileImage(
+  token: string,
+  type: ProfileImage,
+  uri: string,
+  fileName: string | null,
+  mimeType: string | null,
+): Promise<Profile> {
+  const file = await fetch(uri).then(async (response) => {
+    if (!response.ok) throw new Error('Could not read the selected image.');
+    return response.blob();
+  });
+  const body = new FormData();
+  body.append('file', file, fileName ?? `${type}.${mimeType?.split('/')[1] ?? 'jpg'}`);
+  const res = await api(`/users/me/${type}`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body,
+  });
+  if (res.status === 413) throw new Error('Images must be 10 MB or smaller.');
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, `Could not upload your ${type}.`));
+  }
+  return res.json();
+}
+
+export async function removeProfileImage(
+  token: string,
+  type: ProfileImage,
+): Promise<Profile> {
+  const res = await api(`/users/me/${type}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, `Could not remove your ${type}.`));
+  }
   return res.json();
 }
 

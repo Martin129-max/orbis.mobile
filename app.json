@@ -33,6 +33,12 @@
           "imageWidth": 76
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Orbis to access your photos so you can update your profile images."
+        }
+      ],
       "expo-secure-store"
     ],
     "experiments": {
