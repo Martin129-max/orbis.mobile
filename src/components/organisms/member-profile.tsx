@@ -25,7 +25,6 @@ import {
   removeProfileImage,
   setLike,
   uploadProfileImage,
-  vote,
   type Clip,
   type FeedContentType,
   type FeedEntry,
@@ -45,7 +44,6 @@ const profileTabs = [
 
 const postTypes: { value: FeedContentType; label: string }[] = [
   { value: 'post', label: 'Posts' },
-  { value: 'thread', label: 'Threads' },
   { value: 'activity', label: 'Library updates' },
 ];
 
@@ -330,37 +328,17 @@ export function MemberProfile({ username: initialUsername }: { username?: string
       setError('Log in to like posts.');
       return;
     }
-    if (item.type === 'thread') return;
     try {
       const result = await setLike(token, item.type, item.id, !item.liked);
       setPosts((current) =>
         current.map((entry) =>
-          entry.type !== 'thread' && entry.id === item.id
+          entry.id === item.id
             ? { ...entry, liked: result.liked, likeCount: result.likeCount }
             : entry,
         ),
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your like.');
-    }
-  }
-
-  async function castVote(item: Extract<FeedEntry, { type: 'thread' }>, value: -1 | 0 | 1) {
-    if (!token) {
-      setError('Log in to vote on threads.');
-      return;
-    }
-    try {
-      const result = await vote(token, item.id, value);
-      setPosts((current) =>
-        current.map((entry) =>
-          entry.type === 'thread' && entry.id === item.id
-            ? { ...entry, score: result.score, myVote: result.myVote }
-            : entry,
-        ),
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save your vote.');
     }
   }
 
@@ -571,7 +549,6 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                       key={`${item.type}-${item.id}`}
                       item={item}
                       onLike={toggleLike}
-                      onVote={castVote}
                     />
                   ))}
                 </View>

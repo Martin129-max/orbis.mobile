@@ -19,7 +19,6 @@ import {
   getCommunities,
   getFeed,
   setLike,
-  vote,
   type Community,
   type FeedEntry,
 } from '@/lib/api';
@@ -159,14 +158,14 @@ export function HomeFeed() {
   }
 
   async function handleLike(item: FeedEntry) {
-    if (!token || item.type === 'thread') return;
+    if (!token) return;
     const key = entryKey(item);
     if (actionKeys.current.has(key)) return;
     actionKeys.current.add(key);
     const liked = !item.liked;
     const nextCount = item.likeCount + (liked ? 1 : -1);
     setItems((current) => current?.map((entry) =>
-      entryKey(entry) === key && entry.type !== 'thread'
+      entryKey(entry) === key
         ? { ...entry, liked, likeCount: nextCount }
         : entry,
     ) ?? null);
@@ -174,48 +173,17 @@ export function HomeFeed() {
     try {
       const result = await setLike(token, item.type, item.id, liked);
       setItems((current) => current?.map((entry) =>
-        entryKey(entry) === key && entry.type !== 'thread'
+        entryKey(entry) === key
           ? { ...entry, ...result }
           : entry,
       ) ?? null);
     } catch (error) {
       setItems((current) => current?.map((entry) =>
-        entryKey(entry) === key && entry.type !== 'thread'
+        entryKey(entry) === key
           ? { ...entry, liked: item.liked, likeCount: item.likeCount }
           : entry,
       ) ?? null);
       setActionError(error instanceof Error ? error.message : 'Could not save your like.');
-    } finally {
-      actionKeys.current.delete(key);
-    }
-  }
-
-  async function handleVote(item: Extract<FeedEntry, { type: 'thread' }>, value: -1 | 0 | 1) {
-    if (!token) return;
-    const key = entryKey(item);
-    if (actionKeys.current.has(key)) return;
-    actionKeys.current.add(key);
-    const score = item.score - item.myVote + value;
-    setItems((current) => current?.map((entry) =>
-      entryKey(entry) === key && entry.type === 'thread'
-        ? { ...entry, score, myVote: value }
-        : entry,
-    ) ?? null);
-    setActionError(null);
-    try {
-      const result = await vote(token, item.id, value);
-      setItems((current) => current?.map((entry) =>
-        entryKey(entry) === key && entry.type === 'thread'
-          ? { ...entry, ...result }
-          : entry,
-      ) ?? null);
-    } catch (error) {
-      setItems((current) => current?.map((entry) =>
-        entryKey(entry) === key && entry.type === 'thread'
-          ? { ...entry, score: item.score, myVote: item.myVote }
-          : entry,
-      ) ?? null);
-      setActionError(error instanceof Error ? error.message : 'Could not save your vote.');
     } finally {
       actionKeys.current.delete(key);
     }
@@ -311,7 +279,7 @@ export function HomeFeed() {
         data={items ?? []}
         keyExtractor={entryKey}
         renderItem={({ item }) => (
-          <FeedCard item={item} onLike={handleLike} onVote={handleVote} />
+          <FeedCard item={item} onLike={handleLike} />
         )}
         ListHeaderComponent={header}
         ListEmptyComponent={

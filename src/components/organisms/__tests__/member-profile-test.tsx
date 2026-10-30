@@ -179,16 +179,16 @@ describe('member profiles', () => {
     getUserPosts.mockResolvedValue({ items: [], nextCursor: 'next-page' });
 
     await openProfile();
-    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Threads' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Library updates' }));
 
     await waitFor(() =>
-      expect(getUserPosts).toHaveBeenLastCalledWith(null, 'naruto', undefined, ['thread']),
+      expect(getUserPosts).toHaveBeenLastCalledWith(null, 'naruto', undefined, ['activity']),
     );
     expect(await screen.findByText('Nothing matches these filters.')).toBeTruthy();
 
     await fireEvent.press(screen.getByText('Load more'));
     await waitFor(() =>
-      expect(getUserPosts).toHaveBeenLastCalledWith(null, 'naruto', 'next-page', ['thread']),
+      expect(getUserPosts).toHaveBeenLastCalledWith(null, 'naruto', 'next-page', ['activity']),
     );
   });
 
@@ -196,15 +196,13 @@ describe('member profiles', () => {
     getPublicProfile.mockResolvedValue(publicProfile());
 
     await openProfile();
-    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Threads' }));
-    await waitFor(() => expect(getUserPosts).toHaveBeenCalledTimes(2));
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Library updates' }));
-    await waitFor(() => expect(getUserPosts).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(getUserPosts).toHaveBeenCalledTimes(2));
 
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Posts' }));
 
-    expect(getUserPosts).toHaveBeenCalledTimes(3);
-    expect(getUserPosts).toHaveBeenLastCalledWith(null, 'naruto', undefined, ['thread', 'activity']);
+    expect(getUserPosts).toHaveBeenCalledTimes(2);
+    expect(getUserPosts).toHaveBeenLastCalledWith(null, 'naruto', undefined, ['activity']);
   });
 
   it('plays clips in the in-app browser', async () => {

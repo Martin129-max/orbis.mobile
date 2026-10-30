@@ -84,10 +84,10 @@ describe('api requests', () => {
   it('asks the server to leave out hidden kinds of posts, like web', async () => {
     fetchMock.mockReturnValue(respond(200, { items: [], nextCursor: null }));
 
-    await getUserPosts(null, 'naruto', 'next-page', ['thread', 'activity']);
+    await getUserPosts(null, 'naruto', 'next-page', ['post', 'activity']);
 
     expect(String(fetchMock.mock.calls[0][0])).toMatch(
-      /\/users\/naruto\/posts\?cursor=next-page&exclude=thread%2Cactivity$/,
+      /\/users\/naruto\/posts\?cursor=next-page&exclude=post%2Cactivity$/,
     );
   });
 
