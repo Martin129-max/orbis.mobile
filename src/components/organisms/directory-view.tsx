@@ -168,9 +168,6 @@ function CommunityInfo({ community }: { community: DirectoryCommunity }) {
         {community.memberCount === 1 ? 'member' : 'members'}
       </Atom.ThemedText>
       <Atom.ThemedText type="small" themeColor="textSecondary">
-        Owner: @{community.owner.username}
-      </Atom.ThemedText>
-      <Atom.ThemedText type="small" themeColor="textSecondary">
         Created {formattedDate(community.createdAt)}
       </Atom.ThemedText>
     </View>
@@ -266,11 +263,15 @@ function DirectoryList<T>({
   load,
   label,
   keyFor,
+  view,
+  setView,
   renderItem,
 }: {
   load: (token: string, page: number) => Promise<NumberedPage<T>>;
   label: string;
   keyFor: (item: T) => string | number;
+  view: DirectoryViewMode;
+  setView: (view: DirectoryViewMode) => void;
   renderItem: (
     item: T,
     view: DirectoryViewMode,
@@ -278,7 +279,6 @@ function DirectoryList<T>({
   ) => ReactNode;
 }) {
   const theme = useTheme();
-  const [view, setView] = useState<DirectoryViewMode>('cards');
   const { page, setPage, current, failed, retry, updateItem } = useDirectoryPage(load);
 
   if (!current) {
@@ -356,13 +356,23 @@ function DirectoryList<T>({
   );
 }
 
-function UserDirectory({ headAdmin }: { headAdmin: boolean }) {
+function UserDirectory({
+  headAdmin,
+  view,
+  setView,
+}: {
+  headAdmin: boolean;
+  view: DirectoryViewMode;
+  setView: (view: DirectoryViewMode) => void;
+}) {
   const token = useAuthStore((state) => state.token);
   return (
     <DirectoryList
       load={getDirectoryUsers}
       label="users"
       keyFor={(user: DirectoryUser) => user.userId}
+      view={view}
+      setView={setView}
       renderItem={(user: DirectoryUser, view, update) => (
         <>
           <EntryCard
@@ -378,13 +388,23 @@ function UserDirectory({ headAdmin }: { headAdmin: boolean }) {
   );
 }
 
-function CommunityDirectory({ headAdmin }: { headAdmin: boolean }) {
+function CommunityDirectory({
+  headAdmin,
+  view,
+  setView,
+}: {
+  headAdmin: boolean;
+  view: DirectoryViewMode;
+  setView: (view: DirectoryViewMode) => void;
+}) {
   const token = useAuthStore((state) => state.token);
   return (
     <DirectoryList
       load={getDirectoryCommunities}
       label="communities"
       keyFor={(community: DirectoryCommunity) => community.id}
+      view={view}
+      setView={setView}
       renderItem={(community: DirectoryCommunity, view, update) => (
         <>
           <EntryCard
@@ -393,6 +413,14 @@ function CommunityDirectory({ headAdmin }: { headAdmin: boolean }) {
             <EntryImage uri={community.iconUrl} label={community.name} size={view === 'cards' ? 64 : 48} />
             <CommunityInfo community={community} />
           </EntryCard>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`View ${community.owner.username}’s profile`}
+            onPress={() => router.push(`/users/${encodeURIComponent(community.owner.username)}` as Href)}>
+            <Atom.ThemedText type="small" themeColor="textSecondary">
+              Owner: @{community.owner.username}
+            </Atom.ThemedText>
+          </Pressable>
           {headAdmin && token ? (
             <CommunityActions community={community} token={token} update={update} />
           ) : null}
@@ -405,6 +433,7 @@ function CommunityDirectory({ headAdmin }: { headAdmin: boolean }) {
 export function DirectoryView({ headAdmin }: { headAdmin: boolean }) {
   const theme = useTheme();
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const [view, setView] = useState<DirectoryViewMode>('cards');
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const tab: DirectoryTab = requestedTab === 'communities' ? 'communities' : 'users';
 
@@ -431,7 +460,9 @@ export function DirectoryView({ headAdmin }: { headAdmin: boolean }) {
           />
         ))}
       </View>
-      {tab === 'users' ? <UserDirectory headAdmin={headAdmin} /> : <CommunityDirectory headAdmin={headAdmin} />}
+      {tab === 'users'
+        ? <UserDirectory headAdmin={headAdmin} view={view} setView={setView} />
+        : <CommunityDirectory headAdmin={headAdmin} view={view} setView={setView} />}
     </View>
   );
 }

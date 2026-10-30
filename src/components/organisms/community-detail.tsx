@@ -11,7 +11,6 @@ import {
   getCommunityPosts,
   joinCommunity,
   setLike,
-  vote,
   type FeedEntry,
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -53,7 +52,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
     : community;
 
   useEffect(() => {
-    if (!token || !Number.isInteger(id) || id <= 0) return;
+    if (!Number.isInteger(id) || id <= 0) return;
     let active = true;
     getCommunityPosts(token, id)
       .then((page) => {
@@ -99,7 +98,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
   }
 
   async function loadMore() {
-    if (!token || !nextCursor || loadingMore) return;
+    if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
       const page = await getCommunityPosts(token, id, nextCursor);
@@ -123,7 +122,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
   }
 
   async function handleLike(item: FeedEntry) {
-    if (!token || item.type === 'thread') return;
+    if (!token) return;
     const liked = !item.liked;
     try {
       const result = await setLike(token, item.type, item.id, liked);
@@ -131,7 +130,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
         ? {
             ...current,
             items: current.items.map((entry) =>
-              entryKey(entry) === entryKey(item) && entry.type !== 'thread'
+              entryKey(entry) === entryKey(item)
                 ? { ...entry, ...result }
                 : entry),
           }
@@ -139,26 +138,6 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
     } catch (cause) {
       setPostsPage((current) => current?.key === postsKey
         ? { ...current, error: cause instanceof Error ? cause.message : 'Could not save your like.' }
-        : current);
-    }
-  }
-
-  async function handleVote(item: Extract<FeedEntry, { type: 'thread' }>, value: -1 | 0 | 1) {
-    if (!token) return;
-    try {
-      const result = await vote(token, item.id, value);
-      setPostsPage((current) => current?.key === postsKey
-        ? {
-            ...current,
-            items: current.items.map((entry) =>
-              entryKey(entry) === entryKey(item) && entry.type === 'thread'
-                ? { ...entry, ...result }
-                : entry),
-          }
-        : current);
-    } catch (cause) {
-      setPostsPage((current) => current?.key === postsKey
-        ? { ...current, error: cause instanceof Error ? cause.message : 'Could not save your vote.' }
         : current);
     }
   }
@@ -264,7 +243,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
       ) : posts.length ? (
         <View style={styles.posts}>
           {posts.map((item) => (
-            <FeedCard key={entryKey(item)} item={item} onLike={handleLike} onVote={handleVote} />
+            <FeedCard key={entryKey(item)} item={item} onLike={handleLike} />
           ))}
           {nextCursor ? (
             <Atom.Button label="Load more" variant="secondary" loading={loadingMore} onPress={loadMore} />

@@ -12,7 +12,6 @@ export function useCommunity(communityId: string) {
   const key = `${token ?? ''}:${communityId}:${attempt}`;
 
   useEffect(() => {
-    if (!token) return;
     let active = true;
     getCommunity(token, communityId)
       .then((community) => {

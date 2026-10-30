@@ -140,17 +140,60 @@ describe('role-restricted routes', () => {
         communityCount: 1,
         createdAt: '2026-10-01T00:00:00.000Z',
       }],
-      total: 1,
+      total: 21,
       page: 1,
+      pageSize: 20,
+    });
+    getDirectoryUsers.mockResolvedValueOnce({
+      items: [{
+        userId: 2,
+        username: 'sakura',
+        name: 'Sakura',
+        email: 'sakura@anime.test',
+        emailVerifiedAt: null,
+        avatarUrl: null,
+        coverUrl: null,
+        isAdmin: false,
+        isHeadAdmin: false,
+        isVerified: false,
+        communityCount: 1,
+        createdAt: '2026-10-01T00:00:00.000Z',
+      }],
+      total: 21,
+      page: 1,
+      pageSize: 20,
+    }).mockResolvedValueOnce({
+      items: [{
+        userId: 3,
+        username: 'hinata',
+        name: 'Hinata',
+        email: 'hinata@anime.test',
+        emailVerifiedAt: '2026-10-01T00:00:00.000Z',
+        avatarUrl: null,
+        coverUrl: null,
+        isAdmin: false,
+        isHeadAdmin: false,
+        isVerified: false,
+        communityCount: 0,
+        createdAt: '2026-09-01T00:00:00.000Z',
+      }],
+      total: 21,
+      page: 2,
       pageSize: 20,
     });
 
     await renderRouter(routes, { initialUrl: '/directory' });
     expect(await screen.findByText('Sakura')).toBeTruthy();
+    expect(await screen.findByText('Page 1 of 2')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Next'));
+    expect(await screen.findByText('Hinata')).toBeTruthy();
+    expect(await screen.findByText('Page 2 of 2')).toBeTruthy();
     await fireEvent.press(screen.getByText('Communities'));
     expect(await screen.findByText('0 communities')).toBeTruthy();
     await fireEvent.press(screen.getByText('List'));
     expect(screen.getByText('List')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Users'));
+    expect(await screen.findByText('List')).toBeTruthy();
   });
 
   it('shows public communities on the Communities tab', async () => {
@@ -172,6 +215,34 @@ describe('role-restricted routes', () => {
     await renderRouter(routes, { initialUrl: '/communities' });
     expect(await screen.findByText(/Konoha/)).toBeTruthy();
     expect(screen.getByText(/12\s+members/)).toBeTruthy();
+  });
+
+  it('allows guests to view public communities but not private communities', async () => {
+    useAuthStore.setState({ token: null, profile: null, sessionExpired: false });
+    getCommunity.mockResolvedValue({
+      id: 5,
+      name: 'Konoha',
+      description: 'Hidden Leaf Village',
+      iconUrl: null,
+      coverUrl: null,
+      isPublic: true,
+      isVerified: false,
+      memberCount: 3,
+      role: null,
+    });
+
+    await renderRouter(routes, { initialUrl: '/communities/5' });
+
+    expect(await screen.findByText(/Konoha/)).toBeTruthy();
+    expect(getCommunity).toHaveBeenCalledWith(null, '5');
+
+    getCommunity.mockResolvedValueOnce(null);
+    await act(() => router.navigate('/communities/99' as Href));
+    expect(await screen.findByText('This community is private or no longer available.')).toBeTruthy();
+    expect(screen.queryByText('Hidden Leaf Village')).toBeNull();
+
+    await act(() => router.navigate('/directory' as Href));
+    expect(await screen.findByText('Log in')).toBeTruthy();
   });
 
   it('joins a community and opens its page', async () => {

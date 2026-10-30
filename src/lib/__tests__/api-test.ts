@@ -132,4 +132,16 @@ describe('api requests', () => {
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('/communities/5/posts?cursor=next-page');
   });
+
+  it('uses the guest-compatible community read endpoints without leaking an account token', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(200, { id: 5, name: 'Konoha' }))
+      .mockReturnValueOnce(respond(200, { items: [], nextCursor: null }));
+
+    await getCommunity(null, '5');
+    await getCommunityPosts(null, 5);
+
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBeUndefined();
+  });
 });

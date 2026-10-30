@@ -585,7 +585,7 @@ export async function getCommunities(token: string): Promise<Community[]> {
   return res.json();
 }
 
-export async function getCommunity(token: string, id: string): Promise<Community | null> {
+export async function getCommunity(token: string | null, id: string): Promise<Community | null> {
   const res = await api(`/communities/${encodeURIComponent(id)}`, { headers: authHeaders(token) });
   if (res.status === 403 || res.status === 404) return null;
   if (!res.ok) throw new Error(await errorMessage(res, 'Could not load this community.'));
@@ -695,7 +695,7 @@ export async function getFeed(token: string, cursor?: string): Promise<Page<Feed
 }
 
 export async function getCommunityPosts(
-  token: string,
+  token: string | null,
   communityId: number,
   cursor?: string,
 ): Promise<Page<FeedEntry>> {
