@@ -2,6 +2,7 @@ import * as api from '@/lib/api';
 import { clearOAuthState } from '@/lib/oauth';
 
 import { useAuthStore } from '../auth-store';
+import { useThemeStore } from '../theme-store';
 
 jest.mock('@/lib/storage', () => {
   const mockItems = new Map<string, string>();
@@ -80,6 +81,16 @@ describe('auth store', () => {
     await expect(loading).resolves.toBeNull();
     expect(useAuthStore.getState().profile).toBeNull();
     expect(useAuthStore.getState().token).toBe('token-b');
+  });
+
+  it('applies the theme saved on the account when the profile loads', async () => {
+    useThemeStore.setState({ mode: 'system' });
+    getProfile.mockResolvedValueOnce({ ...profileFor(1, 'naruto'), theme: 'light' });
+    useAuthStore.getState().loginWithToken('token-a');
+
+    await useAuthStore.getState().fetchProfile();
+
+    expect(useThemeStore.getState().mode).toBe('light');
   });
 
   it('signs out only when the rejected token is the current one', () => {

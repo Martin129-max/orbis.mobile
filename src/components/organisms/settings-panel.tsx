@@ -9,6 +9,7 @@ import {
   getOAuthConnections,
   resetOnboardingTours,
   setShowLive,
+  updatePreferences as saveThemePreference,
   type OAuthConnections,
   type OAuthProvider,
   type ProfilePreferences,
@@ -110,6 +111,11 @@ export function SettingsPanel() {
     }
   }
 
+  function chooseTheme(next: ThemeMode) {
+    setMode(next);
+    if (token) saveThemePreference(token, { theme: next }).catch(() => null);
+  }
+
   async function restartTours() {
     if (!token || tourPending) return;
     setTourPending(true);
@@ -181,7 +187,7 @@ export function SettingsPanel() {
         <View style={styles.subsection}>
           <Atom.ThemedText type="smallBold">Appearance</Atom.ThemedText>
           <Atom.ThemedText type="small" themeColor="textSecondary">
-            Choose a theme for this device. System follows your device appearance.
+            Your theme is saved to your account. System follows your device appearance.
           </Atom.ThemedText>
           <View accessibilityRole="radiogroup" accessibilityLabel="Theme" style={styles.themeOptions}>
             {themeOptions.map((option) => {
@@ -191,7 +197,7 @@ export function SettingsPanel() {
                   key={option.value}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selected }}
-                  onPress={() => setMode(option.value)}
+                  onPress={() => chooseTheme(option.value)}
                   style={[
                     styles.themeOption,
                     {

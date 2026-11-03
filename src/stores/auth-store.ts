@@ -10,6 +10,7 @@ import type {
 } from '@/lib/api';
 import { clearOAuthState } from '@/lib/oauth';
 import { secureStorage } from '@/lib/storage';
+import { useThemeStore } from '@/stores/theme-store';
 
 type AuthState = {
   token: string | null;
@@ -102,6 +103,7 @@ export const useAuthStore = create<AuthState>()(
         if (!profile || get().token !== token) return null;
 
         set({ profile });
+        useThemeStore.getState().setMode(profile.theme);
         return profile;
       },
       updatePreferences: async (preferences) => {
