@@ -1,5 +1,6 @@
 import {
   api,
+  addFriend,
   createComment,
   createCommunity,
   createMediaPost,
@@ -11,6 +12,7 @@ import {
   getDirectoryUsers,
   getComments,
   getFeed,
+  getFriends,
   getLinkPreview,
   getMediaPosts,
   getMediaProfile,
@@ -23,6 +25,7 @@ import {
   removeCommunityImage,
   searchCommunities,
   searchPeople,
+  removeFriend,
   setCommunityAdmin,
   setLike,
   setNickname,
@@ -142,6 +145,43 @@ describe('api requests', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/communities/search?q=leaf+village');
     expect(String(fetchMock.mock.calls[1][0])).toContain('/communities/5/join');
     expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+  });
+
+  it('uses the web friendship search, list, add, and remove contracts', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(200, []))
+      .mockReturnValueOnce(respond(200, { friends: [], incoming: [], outgoing: [] }))
+      .mockReturnValueOnce(respond(200, {}))
+      .mockReturnValueOnce(respond(200, {}));
+
+    await searchPeople('token', 'sakura & naruto');
+    await getFriends('token');
+    await addFriend('token', { userId: 7 });
+    await removeFriend('token', 7);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/friends/search?q=sakura+%26+naruto');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/friends');
+    expect(fetchMock.mock.calls[2][1].method).toBe('POST');
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ userId: 7 });
+    expect(String(fetchMock.mock.calls[3][0])).toContain('/friends/7');
+    expect(fetchMock.mock.calls[3][1].method).toBe('DELETE');
+  });
+
+  it('explains invalid targets and preserves duplicate-request errors', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(404, {}))
+      .mockReturnValueOnce(respond(409, { message: 'A request already exists' }));
+
+    await expect(addFriend('token', { username: 'missing' })).rejects.toThrow(
+      'No one with that username is on Orbis.',
+    );
+    await expect(addFriend('token', { userId: 7 })).rejects.toThrow('A request already exists.');
+  });
+
+  it('treats a removed friendship or request as already resolved', async () => {
+    fetchMock.mockReturnValue(respond(404, {}));
+
+    await expect(removeFriend('token', 7)).resolves.toBeUndefined();
   });
 
   it('loads and saves the server community layout contract', async () => {

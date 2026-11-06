@@ -38,7 +38,7 @@ describe('post composer', () => {
 
   it('inserts the selected friend username instead of the display name', async () => {
     searchPeople.mockResolvedValue([{
-      id: 8,
+      userId: 8,
       username: 'sakura',
       name: 'Sakura Haruno',
       avatarUrl: null,

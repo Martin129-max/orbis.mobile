@@ -12,7 +12,7 @@ import * as Atom from '@atom';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { normalizeWebUrl } from '@/lib/rich-content';
-import { searchPeople, type Author } from '@/lib/api';
+import { searchPeople, type FriendUser } from '@/lib/api';
 import { sessionFingerprint } from '@/lib/session';
 import { useAuthStore } from '@/stores/auth-store';
 import * as Molecule from '@molecule';
@@ -180,7 +180,7 @@ function PostComposerForm({
   const [peopleState, setPeopleState] = useState<{
     sessionKey: string;
     query: string;
-    people: Author[];
+    people: FriendUser[];
     error: string | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -274,7 +274,7 @@ function PostComposerForm({
     }
   }
 
-  function selectMention(person: Author) {
+  function selectMention(person: FriendUser) {
     if (!match) return;
     const insertion = `@${person.username} `;
     const next = `${content.slice(0, match.start)}${insertion}${content.slice(match.end)}`;
@@ -344,7 +344,7 @@ function PostComposerForm({
         <View style={[styles.suggestions, { borderColor: theme.divider, backgroundColor: theme.surface }]}>
           {people.map((person) => (
             <Pressable
-              key={person.id}
+              key={person.userId}
               accessibilityRole="button"
               accessibilityLabel={`Mention ${person.name || person.username}, @${person.username}`}
               onPress={() => selectMention(person)}
