@@ -149,10 +149,12 @@ export type Post = {
   communityId: number | null;
   content: string;
   linkUrl: string | null;
+  spoiler?: string | null;
   commentCount: number;
   likeCount: number;
   liked: boolean;
   hiddenAt?: string | null;
+  hiddenBecause?: HiddenBecause | null;
   createdAt: string;
   author: Author;
   community: CommunitySummary | null;
@@ -162,6 +164,11 @@ export type Post = {
 export type PresenceStatus = 'online' | 'idle' | 'busy' | 'streaming' | 'offline';
 export type LibraryStatus = 'current' | 'completed' | 'on_hold' | 'dropped' | 'planned';
 export type MediaType = 'anime' | 'manga' | 'game';
+
+export type HiddenBecause =
+  | { kind: 'muted' }
+  | { kind: 'blocked' }
+  | { kind: 'filtered'; phrase: string };
 
 export type PublicProfile = {
   userId: number;
@@ -239,10 +246,17 @@ export type Activity = {
   commentCount: number;
   likeCount: number;
   liked: boolean;
+  hiddenBecause?: HiddenBecause | null;
   createdAt: string;
   author: Author;
   status: 'current' | 'completed' | 'on_hold' | 'dropped' | 'planned';
   progress: { from: number; to: number } | null;
+  steam?: {
+    appId: string;
+    minutes: number;
+    steamId: string;
+    achievements: { achieved: number; total: number } | null;
+  } | null;
   media: {
     type: 'anime' | 'manga' | 'game';
     sourceId: string;
@@ -721,8 +735,15 @@ export async function setProfileAdmin(
   return (await res.json()).isAdmin;
 }
 
-export async function getFeed(token: string, cursor?: string): Promise<Page<FeedEntry>> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+export async function getFeed(
+  token: string,
+  cursor?: string,
+  excludedTypes: FeedContentType[] = [],
+): Promise<Page<FeedEntry>> {
+  const params = new URLSearchParams();
+  if (cursor) params.set('cursor', cursor);
+  if (excludedTypes.length) params.set('exclude', excludedTypes.join(','));
+  const query = params.size ? `?${params}` : '';
   const res = await api(`/feed${query}`, { headers: authHeaders(token) });
   if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your feed.'));
   return res.json();
