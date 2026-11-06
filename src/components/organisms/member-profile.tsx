@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,7 +18,9 @@ import * as Template from '@template';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { FeedCard } from '@/components/organisms/feed-card';
+import { presenceLabel, presenceStatus } from '@/lib/presence';
 import {
+  createWallPost,
   getPublicProfile,
   getUserClips,
   getUserPosts,
@@ -33,7 +35,9 @@ import {
   type PublicProfile,
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+import { useFriendsStore } from '@/stores/friends-store';
 import { useMessagesStore } from '@/stores/messages-store';
+import { PostComposer } from './post-composer';
 
 const profileTabs = [
   { value: 'posts', label: 'Posts' },
@@ -49,7 +53,12 @@ const postTypes: { value: FeedContentType; label: string }[] = [
 ];
 
 type ProfileTab = (typeof profileTabs)[number]['value'];
-type ProfileState = { username: string; profile: PublicProfile | null; failed?: boolean };
+type ProfileState = {
+  username: string;
+  requestKey: string;
+  profile: PublicProfile | null;
+  failed?: boolean;
+};
 
 const libraryStatuses: LibraryStatus[] = ['current', 'completed', 'on_hold', 'dropped', 'planned'];
 const libraryStatusLabels: Record<LibraryStatus, string> = {
@@ -94,6 +103,11 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const preferencesVersion = useAuthStore((state) => state.preferencesVersion);
   const logout = useAuthStore((state) => state.logout);
   const fetchCurrentProfile = useAuthStore((state) => state.fetchProfile);
+  const liveFriends = useFriendsStore((state) => state.friends);
+  const livePresence = useMemo(
+    () => new Map(liveFriends.map((friend) => [friend.userId, friend])),
+    [liveFriends],
+  );
   const theme = useTheme();
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const [loaded, setLoaded] = useState<ProfileState | null>(null);
@@ -112,7 +126,12 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const [chatError, setChatError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [profileAttempt, setProfileAttempt] = useState(0);
-  const currentLoaded = !preferencesPending && loaded?.username === username ? loaded : null;
+  const profileRequestKey = `${preferencesVersion}:${profileAttempt}`;
+  const currentLoaded = !preferencesPending &&
+    loaded?.username === username &&
+    loaded.requestKey === profileRequestKey
+    ? loaded
+    : null;
   const profile = currentLoaded?.profile ?? null;
   const activeTab =
     isProfileTab(requestedTab) &&
@@ -155,20 +174,20 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     }
   }, [fetchCurrentProfile, signedInProfile, token]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (preferencesPending) return;
     let active = true;
     getPublicProfile(token, username)
       .then((result) => {
-        if (active) setLoaded({ username, profile: result });
+        if (active) setLoaded({ username, requestKey: profileRequestKey, profile: result });
       })
       .catch(() => {
-        if (active) setLoaded({ username, profile: null, failed: true });
+        if (active) setLoaded({ username, requestKey: profileRequestKey, profile: null, failed: true });
       });
     return () => {
       active = false;
     };
-  }, [preferencesPending, preferencesVersion, profileAttempt, token, username]);
+  }, [preferencesPending, profileRequestKey, token, username]));
 
   useEffect(() => {
     if (!contentUsername) return;
@@ -367,6 +386,22 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     }
   }
 
+  async function handleWallPost(content: string, linkUrl?: string) {
+    if (!token || !profile || !signedInProfile?.emailVerifiedAt) {
+      throw new Error('Confirm your email before posting.');
+    }
+    const post = await createWallPost(token, profile.username, content, linkUrl);
+    setPosts((current) => [post, ...current.filter((item) => `${item.type}-${item.id}` !== `${post.type}-${post.id}`)]);
+  }
+
+  function handleFeedChange(updated: FeedEntry) {
+    setPosts((current) =>
+      current.map((item) =>
+        `${item.type}-${item.id}` === `${updated.type}-${updated.id}` ? updated : item,
+      ),
+    );
+  }
+
   if (!currentLoaded) {
     return (
       <Template.ScreenTemplate>
@@ -455,6 +490,11 @@ export function MemberProfile({ username: initialUsername }: { username?: string
               label="Account settings"
               variant="secondary"
               onPress={() => router.push('/settings' as Href)}
+            />
+            <Atom.Button
+              label="Friends & requests"
+              variant="secondary"
+              onPress={() => router.push('/friends' as Href)}
             />
             {signedInProfile?.isAdmin ? (
               <Atom.Button
@@ -577,26 +617,33 @@ export function MemberProfile({ username: initialUsername }: { username?: string
             {contentLoading && (activeTab === 'posts' || activeTab === 'clips') ? (
               <View style={styles.centered}><Atom.ThemedText themeColor="textSecondary">Loading…</Atom.ThemedText></View>
             ) : activeTab === 'posts' ? (
-              posts.length ? (
-                <View style={styles.list}>
-                  {posts.map((item) => (
+              <View style={styles.list}>
+                {token && signedInProfile?.emailVerifiedAt ? (
+                  <PostComposer
+                    placeholder={`Write on ${isSelf ? 'your' : `${name}’s`} wall…`}
+                    onPost={handleWallPost}
+                  />
+                ) : null}
+                {posts.length ? (
+                  posts.map((item) => (
                     <FeedCard
                       key={`${item.type}-${item.id}`}
                       item={item}
                       onLike={toggleLike}
+                      onChange={handleFeedChange}
                     />
-                  ))}
-                </View>
-              ) : (
-                hiddenTypes.length ? (
-                  <ProfileEmpty
-                    title="Nothing matches these filters."
-                    body={`Turn on more kinds of posts to see more from ${name}.`}
-                  />
+                  ))
                 ) : (
-                  <ProfileEmpty title="Nothing here yet." body={`${name}’s posts and shared activity will appear here.`} />
-                )
-              )
+                  hiddenTypes.length ? (
+                    <ProfileEmpty
+                      title="Nothing matches these filters."
+                      body={`Turn on more kinds of posts to see more from ${name}.`}
+                    />
+                  ) : (
+                    <ProfileEmpty title="Nothing here yet." body={`${name}’s posts and shared activity will appear here.`} />
+                  )
+                )}
+              </View>
             ) : activeTab === 'library' ? (
               profile.library.length ? (
                 <View style={styles.list}>
@@ -640,7 +687,14 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                   {profile.library
                     .filter((entry) => libraryStatus === 'all' || entry.status === libraryStatus)
                     .map((entry) => (
-                    <View key={entry.id} style={[styles.listCard, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
+                    <Pressable
+                      key={entry.id}
+                      accessibilityRole="link"
+                      accessibilityLabel={`View discussions about ${entry.title}`}
+                      onPress={() => router.push(
+                        `/library/${entry.mediaType}/${encodeURIComponent(entry.sourceId)}` as Href,
+                      )}
+                      style={[styles.listCard, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
                       {entry.coverImage ? <Image source={{ uri: entry.coverImage }} style={styles.libraryCover} /> : null}
                       <View style={styles.itemBody}>
                         <Atom.ThemedText type="smallBold">{entry.title}</Atom.ThemedText>
@@ -653,7 +707,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                           </Atom.ThemedText>
                         ) : null}
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               ) : (
@@ -680,7 +734,10 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                           {friend.name || friend.username}{friend.isVerified ? ' · Verified' : ''}
                         </Atom.ThemedText>
                         <Atom.ThemedText type="small" themeColor="textSecondary">
-                          @{friend.username} · {friend.online ? friend.status : 'offline'}
+                          @{friend.username} · {presenceLabel(presenceStatus(
+                            livePresence.get(friend.userId)?.online ?? friend.online,
+                            livePresence.get(friend.userId)?.status ?? friend.status,
+                          ))}
                         </Atom.ThemedText>
                       </View>
                     </Pressable>

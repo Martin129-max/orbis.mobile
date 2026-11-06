@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { OAuthButtons } from './oauth-buttons';
+import { PresenceStatusPicker } from './presence-status-picker';
 
 const providerLabels: Record<OAuthProvider, string> = {
   discord: 'Discord',
@@ -254,6 +255,7 @@ export function SettingsPanel() {
 
       <View style={styles.section}>
         <Atom.ThemedText type="smallBold">Privacy</Atom.ThemedText>
+        <PresenceStatusPicker />
         <Atom.ThemedText type="smallBold">Visibility</Atom.ThemedText>
         <PreferenceRow
           label="Appear offline"
