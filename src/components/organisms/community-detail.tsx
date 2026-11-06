@@ -1,5 +1,5 @@
-import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, type Href, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import * as Atom from '@atom';
 
@@ -27,6 +27,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
   const token = useAuthStore((state) => state.token);
   const { profile, failed: profileFailed, retry: retryProfile } = useCurrentProfile();
   const { loading, community, failed, retry } = useCommunity(communityId);
+  const hasFocused = useRef(false);
   const [joinedCommunity, setJoinedCommunity] = useState<{
     key: string;
     role: 'member';
@@ -52,6 +53,11 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
   const currentCommunity = community && joinedCommunity?.key === `${token ?? ''}:${community.id}`
     ? { ...community, role: joinedCommunity.role, memberCount: joinedCommunity.memberCount }
     : community;
+
+  useFocusEffect(useCallback(() => {
+    if (hasFocused.current) retry();
+    else hasFocused.current = true;
+  }, [retry]));
 
   useEffect(() => {
     if (!Number.isInteger(id) || id <= 0) return;

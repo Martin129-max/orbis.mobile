@@ -1,9 +1,12 @@
 import {
   api,
   createComment,
+  createCommunity,
   createMediaPost,
   createWallPost,
+  deleteCommunity,
   getCommunity,
+  getCommunityMembers,
   getCommunityPosts,
   getDirectoryUsers,
   getComments,
@@ -16,14 +19,18 @@ import {
   getUserPosts,
   joinCommunity,
   login,
-  searchPeople,
+  removeCommunityImage,
   searchCommunities,
+  searchPeople,
+  setCommunityAdmin,
   setLike,
   setNickname,
   setProfileVerified,
   setShowLibraryUpdates,
   setUnauthorizedHandler,
+  updateCommunity,
   updateRailLayout,
+  uploadCommunityImage,
 } from '../api';
 
 function respond(status: number, body: unknown) {
@@ -186,6 +193,79 @@ describe('api requests', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/admin/users?page=2');
     expect(String(fetchMock.mock.calls[1][0])).toContain('/users/sakura/verified');
     expect(fetchMock.mock.calls[1][1].method).toBe('PUT');
+  });
+
+  it('creates communities with the shared name and visibility contract', async () => {
+    fetchMock.mockReturnValue(respond(201, { id: 8, name: 'Konoha', isPublic: false }));
+
+    await createCommunity('token', '  Konoha  ', false);
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/communities$/);
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      name: 'Konoha',
+      isPublic: false,
+    });
+  });
+
+  it('updates community fields and applies the owner-only admin endpoints', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(200, { name: 'New name', isPublic: true }))
+      .mockReturnValueOnce(respond(200, [{ userId: 7, isAdmin: true }]))
+      .mockReturnValueOnce(respond(200, [{ userId: 7, isAdmin: false }]));
+
+    await updateCommunity('token', 5, {
+      name: 'New name',
+      description: 'A description',
+      isPublic: true,
+      links: { website: 'https://example.com' },
+    });
+    await setCommunityAdmin('token', 5, 7, true);
+    await setCommunityAdmin('token', 5, 7, false);
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/communities\/5$/);
+    expect(fetchMock.mock.calls[0][1].method).toBe('PATCH');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      name: 'New name',
+      description: 'A description',
+      isPublic: true,
+      links: { website: 'https://example.com' },
+    });
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/communities/5/admins/7');
+    expect(fetchMock.mock.calls[1][1].method).toBe('PUT');
+    expect(fetchMock.mock.calls[2][1].method).toBe('DELETE');
+  });
+
+  it('loads community members and reports denied access', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(200, [{ userId: 7, username: 'sakura' }]))
+      .mockReturnValueOnce(respond(403, { message: 'Forbidden' }));
+
+    await expect(getCommunityMembers('token', 5)).resolves.toMatchObject([
+      { userId: 7, username: 'sakura' },
+    ]);
+    await expect(getCommunityMembers('token', 5)).rejects.toThrow();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/communities/5/members');
+  });
+
+  it('uploads and deletes community images using shared image endpoints', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(new Blob(['image']), { status: 200 }))
+      .mockReturnValueOnce(respond(200, { coverUrl: 'https://example.com/cover.jpg' }))
+      .mockReturnValueOnce(respond(200, { coverUrl: null }))
+      .mockReturnValueOnce(new Response(null, { status: 204 }));
+
+    await uploadCommunityImage('token', 5, 'cover', 'file:///cover.jpg', 'cover.jpg', 'image/jpeg');
+    await removeCommunityImage('token', 5, 'cover');
+    await deleteCommunity('token', 5);
+
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/communities/5/cover');
+    expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+    expect(fetchMock.mock.calls[1][1].body).toBeInstanceOf(FormData);
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/communities/5/cover');
+    expect(fetchMock.mock.calls[2][1].method).toBe('DELETE');
+    expect(String(fetchMock.mock.calls[3][0])).toContain('/communities/5');
+    expect(fetchMock.mock.calls[3][1].method).toBe('DELETE');
   });
 
   it('loads community activity using the shared feed cursor contract', async () => {
