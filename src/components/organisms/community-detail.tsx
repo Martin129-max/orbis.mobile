@@ -260,11 +260,18 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
               onPress={() => router.push(`/communities/${id}/member-settings` as Href)}
             />
             {canManage ? (
-              <Atom.Button
-                label="Community settings"
-                variant="secondary"
-                onPress={() => router.push(`/communities/${id}/settings` as Href)}
-              />
+              <>
+                <Atom.Button
+                  label="Community settings"
+                  variant="secondary"
+                  onPress={() => router.push(`/communities/${id}/settings` as Href)}
+                />
+                <Atom.Button
+                  label="Invite members"
+                  variant="secondary"
+                  onPress={() => router.push(`/communities/${id}/invites` as Href)}
+                />
+              </>
             ) : null}
           </View>
         )}

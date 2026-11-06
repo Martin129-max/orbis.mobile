@@ -100,6 +100,36 @@ export type Community = {
   showLibraryUpdates?: boolean;
 };
 
+export type InviteCreator = {
+  id: number;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+export type Invite = {
+  code: string;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string | null;
+  permanent: boolean;
+  disabledAt: string | null;
+  createdAt: string;
+  creator: InviteCreator;
+};
+
+export type InvitePreview = {
+  code: string;
+  expiresAt: string | null;
+  creator: InviteCreator;
+  community: Pick<
+    Community,
+    'id' | 'name' | 'iconUrl' | 'coverUrl' | 'backgroundUrl' | 'isPublic' | 'isVerified'
+  > & {
+    memberCount: number;
+  };
+};
+
 export type RailFolder = {
   type: 'folder';
   id: number;
@@ -1168,5 +1198,97 @@ export async function setLike(
     body: JSON.stringify({ type, id, liked }),
   });
   if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your like.'));
+  return res.json();
+}
+
+export async function createInvite(
+  token: string,
+  communityId: number,
+  options: { maxAge: number | null; maxUses: number | null },
+): Promise<Invite> {
+  const res = await api(`/communities/${communityId}/invites`, {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not create an invite link.'));
+  return res.json();
+}
+
+export async function getInvites(token: string, communityId: number): Promise<Invite[]> {
+  const res = await api(`/communities/${communityId}/invites`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load invites.'));
+  return res.json();
+}
+
+export async function revokeInvite(
+  token: string,
+  communityId: number,
+  code: string,
+): Promise<void> {
+  const res = await api(
+    `/communities/${communityId}/invites/${encodeURIComponent(code)}`,
+    { method: 'DELETE', headers: authHeaders(token) },
+  );
+  if (res.status === 403) throw new Error(await errorMessage(res, 'Only admins can revoke this invite.'));
+  if (!res.ok && res.status !== 404) {
+    throw new Error(await errorMessage(res, 'Could not revoke the invite.'));
+  }
+}
+
+export async function createPermanentInvite(
+  token: string,
+  communityId: number,
+): Promise<Invite> {
+  const res = await api(`/communities/${communityId}/invites/permanent`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not create the permanent invite.'));
+  return res.json();
+}
+
+export async function setInviteEnabled(
+  token: string,
+  communityId: number,
+  code: string,
+  enabled: boolean,
+): Promise<Invite> {
+  const res = await api(`/communities/${communityId}/invites/${encodeURIComponent(code)}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not update the permanent invite.'));
+  return res.json();
+}
+
+export async function downloadInviteCard(token: string, communityId: number): Promise<Blob> {
+  const res = await api(`/communities/${communityId}/invites/permanent/card`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not download the invite card.'));
+  return res.blob();
+}
+
+export async function getInvitePreview(code: string): Promise<InvitePreview | null> {
+  const res = await api(`/invites/${encodeURIComponent(code)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load the invite.'));
+  return res.json();
+}
+
+export async function acceptInvite(token: string, code: string): Promise<Community> {
+  const res = await api(`/invites/${encodeURIComponent(code)}`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  });
+  if (res.status === 404) throw new Error('This invite is invalid or has expired.');
+  if (res.status === 403) {
+    throw new Error(await errorMessage(res, 'You cannot join this community.'));
+  }
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not join the community.'));
   return res.json();
 }
