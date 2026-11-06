@@ -10,6 +10,7 @@ import {
   getCommunityPosts,
   getDirectoryUsers,
   getComments,
+  getFeed,
   getLinkPreview,
   getMediaPosts,
   getMediaProfile,
@@ -109,6 +110,17 @@ describe('api requests', () => {
     expect(String(fetchMock.mock.calls[0][0])).toMatch(
       /\/users\/naruto\/posts\?cursor=next-page&exclude=post%2Cactivity$/,
     );
+  });
+
+  it('uses the feed cursor and content exclusions supported by web', async () => {
+    fetchMock.mockReturnValue(respond(200, { items: [], nextCursor: null }));
+
+    await getFeed('token', 'next page', ['activity']);
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(
+      /\/feed\?cursor=next\+page&exclude=activity$/,
+    );
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer token');
   });
 
   it('treats a hidden community as no access but reports outages', async () => {
