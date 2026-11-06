@@ -214,13 +214,27 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
               </View>
             ) : null}
           </>
-        ) : canManage ? (
-          <Atom.Button
-            label="Community settings"
-            variant="secondary"
-            onPress={() => router.push(`/communities/${id}/settings` as Href)}
-          />
-        ) : null}
+        ) : (
+          <View style={styles.navigation}>
+            <Atom.Button
+              label="Members"
+              variant="secondary"
+              onPress={() => router.push(`/communities/${id}/members` as Href)}
+            />
+            <Atom.Button
+              label="Your settings"
+              variant="secondary"
+              onPress={() => router.push(`/communities/${id}/member-settings` as Href)}
+            />
+            {canManage ? (
+              <Atom.Button
+                label="Community settings"
+                variant="secondary"
+                onPress={() => router.push(`/communities/${id}/settings` as Href)}
+              />
+            ) : null}
+          </View>
+        )}
         {joinError ? <Atom.ErrorMessage>{joinError}</Atom.ErrorMessage> : null}
       </View>
 
@@ -297,6 +311,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   accountError: {
+    gap: Spacing.two,
+  },
+  navigation: {
     gap: Spacing.two,
   },
   state: {
