@@ -1,31 +1,23 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
-import * as Linking from 'expo-linking';
 import * as Atom from '@atom';
+import * as Molecule from '@molecule';
 
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { WEB_URL, type FeedEntry } from '@/lib/api';
+import { findTextUrl } from '@/lib/rich-content';
+import type { FeedEntry } from '@/lib/api';
+import { CommentSection } from './comment-section';
 
 type FeedCardProps = {
   item: FeedEntry;
   onLike: (item: FeedEntry) => void;
+  onChange?: (item: FeedEntry) => void;
+  canComment?: boolean;
+  context?: string;
   compact?: boolean;
 };
-
-function readableContent(content: string) {
-  return content
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .trim();
-}
 
 function relativeTime(date: string) {
   const elapsed = Math.max(0, Date.now() - new Date(date).getTime());
@@ -61,9 +53,16 @@ function activityText(activity: Extract<FeedEntry, { type: 'activity' }>): [stri
   return text[status];
 }
 
-export function FeedCard({ item, onLike, compact = false }: FeedCardProps) {
+export function FeedCard({
+  item,
+  onLike,
+  onChange,
+  canComment = true,
+  context,
+  compact = false,
+}: FeedCardProps) {
   const theme = useTheme();
-  const [linkError, setLinkError] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [showSpoiler, setShowSpoiler] = useState(false);
   const author = item.author;
@@ -77,33 +76,17 @@ export function FeedCard({ item, onLike, compact = false }: FeedCardProps) {
         : null;
   const postContext =
     item.type === 'post'
-      ? item.community?.name
+      ? context
+        ?? item.community?.name
         ?? (item.wallUser
           ? `Wall of ${item.wallUser.name || item.wallUser.username}`
           : 'Your wall')
       : '';
+  const previewUrl = item.type === 'post'
+    ? item.linkUrl ?? findTextUrl(item.content)
+    : null;
   const [activityVerb, activitySuffix] =
     item.type === 'activity' ? activityText(item) : ['', ''];
-
-  async function openLink(value: string) {
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      setLinkError(true);
-      return;
-    }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-      setLinkError(true);
-      return;
-    }
-    setLinkError(false);
-    try {
-      await Linking.openURL(url.toString());
-    } catch {
-      setLinkError(true);
-    }
-  }
 
   return (
     <View
@@ -161,9 +144,9 @@ export function FeedCard({ item, onLike, compact = false }: FeedCardProps) {
             <View style={styles.body}>
               <Pressable
                 accessibilityRole="link"
-                accessibilityLabel={`View ${item.media.title} on Orbis`}
-                onPress={() => openLink(
-                  `${WEB_URL}/library/${item.media.type}/${encodeURIComponent(item.media.sourceId)}`,
+                accessibilityLabel={`View discussions about ${item.media.title}`}
+                onPress={() => router.push(
+                  `/library/${item.media.type}/${encodeURIComponent(item.media.sourceId)}` as Href,
                 )}
                 style={styles.mediaRow}>
                 {item.media.coverImage ? (
@@ -183,6 +166,11 @@ export function FeedCard({ item, onLike, compact = false }: FeedCardProps) {
                   </Atom.ThemedText>
                 </View>
               </Pressable>
+              {item.steam ? (
+                <Atom.ThemedText type="small" themeColor="textSecondary">
+                  Steam · {item.steam.minutes} minutes played
+                </Atom.ThemedText>
+              ) : null}
             </View>
           ) : (
             <View style={styles.body}>
@@ -199,31 +187,13 @@ export function FeedCard({ item, onLike, compact = false }: FeedCardProps) {
                 </View>
               ) : (
                 <>
-                  {item.content ? (
-                    <Atom.ThemedText numberOfLines={compact ? 3 : undefined}>
-                      {readableContent(item.content)}
-                    </Atom.ThemedText>
-                  ) : null}
-                  {item.linkUrl ? (
-                    <Pressable
-                      accessibilityRole="link"
-                      onPress={() => void openLink(item.linkUrl ?? '')}>
-                      <Atom.ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                        {item.linkUrl}
-                      </Atom.ThemedText>
-                    </Pressable>
-                  ) : null}
+                  {item.content ? <Molecule.RichContent content={item.content} /> : null}
+                  {previewUrl ? <Molecule.LinkPreview url={previewUrl} /> : null}
                 </>
               )}
             </View>
           )}
 
-          {item.type === 'activity' && item.steam ? (
-            <Atom.ThemedText type="small" themeColor="textSecondary">
-              Steam · {item.steam.minutes} minutes played
-            </Atom.ThemedText>
-          ) : null}
-          {linkError ? <Atom.ErrorMessage>Could not open this link.</Atom.ErrorMessage> : null}
           <View style={[styles.actions, compact && styles.compactActions, { borderTopColor: theme.divider }]}>
             <Pressable
               accessibilityRole="button"
@@ -236,10 +206,24 @@ export function FeedCard({ item, onLike, compact = false }: FeedCardProps) {
                 {item.liked ? '♥' : '♡'} {item.likeCount}
               </Atom.ThemedText>
             </Pressable>
-            <Atom.ThemedText type="small" themeColor="textSecondary">
-              {item.commentCount} {item.commentCount === 1 ? 'comment' : 'comments'}
-            </Atom.ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${item.commentCount} ${item.commentCount === 1 ? 'comment' : 'comments'}`}
+              accessibilityState={{ expanded: commentsOpen }}
+              onPress={() => setCommentsOpen((open) => !open)}
+              style={({ pressed }) => [styles.commentButton, pressed && styles.pressed]}>
+              <Atom.ThemedText type="small" themeColor="textSecondary">
+                {item.commentCount} {item.commentCount === 1 ? 'comment' : 'comments'}
+              </Atom.ThemedText>
+            </Pressable>
           </View>
+          {commentsOpen ? (
+            <CommentSection
+              target={{ type: item.type, id: item.id }}
+              canComment={canComment}
+              onCommentsChange={(commentCount) => onChange?.({ ...item, commentCount })}
+            />
+          ) : null}
         </>
       )}
     </View>
@@ -318,6 +302,10 @@ const styles = StyleSheet.create({
   },
   action: {
     minHeight: 32,
+    justifyContent: 'center',
+  },
+  commentButton: {
+    minHeight: 36,
     justifyContent: 'center',
   },
   compactActions: {

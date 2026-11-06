@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { getCommunity, type Community } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -26,11 +26,12 @@ export function useCommunity(communityId: string) {
   }, [communityId, key, token]);
 
   const current = loaded?.key === key ? loaded : null;
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   return {
     loading: !current,
     community: current?.community ?? null,
     failed: current?.failed ?? false,
-    retry: () => setAttempt((value) => value + 1),
+    retry,
   };
 }

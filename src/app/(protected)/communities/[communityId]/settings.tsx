@@ -1,4 +1,4 @@
-import { useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import * as Organism from '@organism';
 import * as Template from '@template';
 
@@ -30,11 +30,12 @@ export default function CommunitySettingsScreen() {
           href: `/communities/${encodeURIComponent(communityId)}` as Href,
         }}
         onRetry={retry}>
-        <Organism.ComingSoon
-          title="Community settings"
-          description="Community settings aren’t in the app yet. You can change them on the Orbis website in the meantime."
-          webPath={`/communities/${encodeURIComponent(communityId)}/settings`}
-        />
+        {community ? (
+          <Organism.CommunitySettings
+            community={community}
+            onDeleted={() => router.replace('/communities' as Href)}
+          />
+        ) : null}
       </Organism.AccessGate>
     </Template.ScreenTemplate>
   );
