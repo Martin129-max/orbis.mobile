@@ -20,6 +20,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { FeedCard } from '@/components/organisms/feed-card';
 import { presenceLabel, presenceStatus } from '@/lib/presence';
 import {
+  createWallPost,
   getPublicProfile,
   getUserClips,
   getUserPosts,
@@ -35,6 +36,7 @@ import {
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useFriendsStore } from '@/stores/friends-store';
+import { PostComposer } from './post-composer';
 
 const profileTabs = [
   { value: 'posts', label: 'Posts' },
@@ -362,6 +364,22 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     }
   }
 
+  async function handleWallPost(content: string, linkUrl?: string) {
+    if (!token || !profile || !signedInProfile?.emailVerifiedAt) {
+      throw new Error('Confirm your email before posting.');
+    }
+    const post = await createWallPost(token, profile.username, content, linkUrl);
+    setPosts((current) => [post, ...current.filter((item) => `${item.type}-${item.id}` !== `${post.type}-${post.id}`)]);
+  }
+
+  function handleFeedChange(updated: FeedEntry) {
+    setPosts((current) =>
+      current.map((item) =>
+        `${item.type}-${item.id}` === `${updated.type}-${updated.id}` ? updated : item,
+      ),
+    );
+  }
+
   if (!currentLoaded) {
     return (
       <Template.ScreenTemplate>
@@ -567,26 +585,33 @@ export function MemberProfile({ username: initialUsername }: { username?: string
             {contentLoading && (activeTab === 'posts' || activeTab === 'clips') ? (
               <View style={styles.centered}><Atom.ThemedText themeColor="textSecondary">Loading…</Atom.ThemedText></View>
             ) : activeTab === 'posts' ? (
-              posts.length ? (
-                <View style={styles.list}>
-                  {posts.map((item) => (
+              <View style={styles.list}>
+                {token && signedInProfile?.emailVerifiedAt ? (
+                  <PostComposer
+                    placeholder={`Write on ${isSelf ? 'your' : `${name}’s`} wall…`}
+                    onPost={handleWallPost}
+                  />
+                ) : null}
+                {posts.length ? (
+                  posts.map((item) => (
                     <FeedCard
                       key={`${item.type}-${item.id}`}
                       item={item}
                       onLike={toggleLike}
+                      onChange={handleFeedChange}
                     />
-                  ))}
-                </View>
-              ) : (
-                hiddenTypes.length ? (
-                  <ProfileEmpty
-                    title="Nothing matches these filters."
-                    body={`Turn on more kinds of posts to see more from ${name}.`}
-                  />
+                  ))
                 ) : (
-                  <ProfileEmpty title="Nothing here yet." body={`${name}’s posts and shared activity will appear here.`} />
-                )
-              )
+                  hiddenTypes.length ? (
+                    <ProfileEmpty
+                      title="Nothing matches these filters."
+                      body={`Turn on more kinds of posts to see more from ${name}.`}
+                    />
+                  ) : (
+                    <ProfileEmpty title="Nothing here yet." body={`${name}’s posts and shared activity will appear here.`} />
+                  )
+                )}
+              </View>
             ) : activeTab === 'library' ? (
               profile.library.length ? (
                 <View style={styles.list}>
@@ -630,7 +655,14 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                   {profile.library
                     .filter((entry) => libraryStatus === 'all' || entry.status === libraryStatus)
                     .map((entry) => (
-                    <View key={entry.id} style={[styles.listCard, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
+                    <Pressable
+                      key={entry.id}
+                      accessibilityRole="link"
+                      accessibilityLabel={`View discussions about ${entry.title}`}
+                      onPress={() => router.push(
+                        `/library/${entry.mediaType}/${encodeURIComponent(entry.sourceId)}` as Href,
+                      )}
+                      style={[styles.listCard, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
                       {entry.coverImage ? <Image source={{ uri: entry.coverImage }} style={styles.libraryCover} /> : null}
                       <View style={styles.itemBody}>
                         <Atom.ThemedText type="smallBold">{entry.title}</Atom.ThemedText>
@@ -643,7 +675,7 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                           </Atom.ThemedText>
                         ) : null}
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               ) : (

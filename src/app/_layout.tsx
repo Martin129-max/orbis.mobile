@@ -92,6 +92,8 @@ export default function RootLayout() {
       <View style={{ flex: 1 }} onTouchStart={() => activityHandler.current()}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="invite/[code]" />
+          <Stack.Screen name="qr/[code]" />
           <Stack.Protected guard={!signedIn}>
             <Stack.Screen name="login" />
             <Stack.Screen name="register" />
