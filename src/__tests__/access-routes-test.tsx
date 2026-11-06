@@ -1,11 +1,13 @@
 import { router, type Href } from 'expo-router';
-import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
 import RootLayout from '@/app/_layout';
 import ProtectedLayout, { unstable_settings } from '@/app/(protected)/_layout';
 import CommunitiesTab from '@/app/(protected)/(tabs)/communities';
 import CommunityDetailScreen from '@/app/(protected)/communities/[communityId]';
+import CommunityMembersScreen from '@/app/(protected)/communities/[communityId]/members';
+import CommunityMemberSettingsScreen from '@/app/(protected)/communities/[communityId]/member-settings';
 import CommunitySettingsScreen from '@/app/(protected)/communities/[communityId]/settings';
 import DirectoryScreen from '@/app/(protected)/directory';
 import ReportsScreen from '@/app/(protected)/reports';
@@ -33,8 +35,14 @@ jest.mock('@/lib/api', () => ({
   getCommunity: jest.fn(),
   getCommunityMembers: jest.fn(),
   getCommunityPosts: jest.fn(),
+  getCommunities: jest.fn(),
   getDirectoryUsers: jest.fn(),
   getDirectoryCommunities: jest.fn(),
+  getMembers: jest.fn(),
+  getRailLayout: jest.fn(),
+  updateRailLayout: jest.fn(),
+  setNickname: jest.fn(),
+  setShowLibraryUpdates: jest.fn(),
   searchCommunities: jest.fn(),
   joinCommunity: jest.fn(),
 }));
@@ -43,8 +51,14 @@ const getProfile = api.getProfile as jest.Mock;
 const getCommunity = api.getCommunity as jest.Mock;
 const getCommunityMembers = api.getCommunityMembers as jest.Mock;
 const getCommunityPosts = api.getCommunityPosts as jest.Mock;
+const getCommunities = api.getCommunities as jest.Mock;
 const getDirectoryUsers = api.getDirectoryUsers as jest.Mock;
 const getDirectoryCommunities = api.getDirectoryCommunities as jest.Mock;
+const getMembers = api.getMembers as jest.Mock;
+const getRailLayout = api.getRailLayout as jest.Mock;
+const updateRailLayout = api.updateRailLayout as jest.Mock;
+const setNickname = api.setNickname as jest.Mock;
+const setShowLibraryUpdates = api.setShowLibraryUpdates as jest.Mock;
 const searchCommunities = api.searchCommunities as jest.Mock;
 const joinCommunity = api.joinCommunity as jest.Mock;
 
@@ -65,6 +79,8 @@ const routes = {
   '(protected)/directory': DirectoryScreen,
   '(protected)/reports': ReportsScreen,
   '(protected)/communities/[communityId]': CommunityDetailScreen,
+  '(protected)/communities/[communityId]/members': CommunityMembersScreen,
+  '(protected)/communities/[communityId]/member-settings': CommunityMemberSettingsScreen,
   '(protected)/communities/[communityId]/settings': CommunitySettingsScreen,
 };
 
@@ -95,8 +111,29 @@ describe('role-restricted routes', () => {
     useAuthStore.setState({ token: 'token', profile: null, sessionExpired: false });
     getCommunityPosts.mockResolvedValue({ items: [], nextCursor: null });
     getCommunityMembers.mockResolvedValue([]);
+    getCommunities.mockResolvedValue([]);
     getDirectoryUsers.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     getDirectoryCommunities.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+    getMembers.mockResolvedValue([{
+      userId: 1,
+      username: 'naruto',
+      name: 'Naruto',
+      avatarUrl: null,
+      coverUrl: null,
+      isVerified: false,
+      online: false,
+      status: 'offline',
+      nickname: null,
+      joinedAt: '2026-10-01T00:00:00.000Z',
+      isOwner: false,
+      isAdmin: false,
+    }]);
+    getRailLayout.mockResolvedValue([]);
+    updateRailLayout.mockImplementation(async (_token, layout) => layout);
+    setNickname.mockImplementation(async (_token, _communityId, nickname) => ({ nickname }));
+    setShowLibraryUpdates.mockImplementation(async (_token, _communityId, show) => ({
+      showLibraryUpdates: show,
+    }));
     searchCommunities.mockResolvedValue([]);
     joinCommunity.mockResolvedValue({ id: 8, name: 'Konoha', iconUrl: null, role: 'member' });
   });
@@ -223,6 +260,34 @@ describe('role-restricted routes', () => {
     expect(screen.getByText(/12\s+members/)).toBeTruthy();
   });
 
+  it('reorders joined communities and saves the shared layout', async () => {
+    useAuthStore.setState({
+      token: 'token',
+      profile: profile(false),
+      sessionExpired: false,
+    });
+    getCommunities.mockResolvedValue([
+      { id: 8, name: 'Konoha', iconUrl: null, role: 'member' },
+      { id: 9, name: 'Suna', iconUrl: null, role: 'member' },
+    ]);
+    getRailLayout.mockResolvedValue([
+      { type: 'community', communityId: 8 },
+      { type: 'community', communityId: 9 },
+    ]);
+
+    await renderRouter(routes, { initialUrl: '/communities' });
+    expect(await screen.findByText('Your communities')).toBeTruthy();
+    expect(await screen.findByText('Konoha')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Move Konoha down'));
+
+    await waitFor(() => {
+      expect(updateRailLayout).toHaveBeenCalledWith('token', [
+        { type: 'community', communityId: 9 },
+        { type: 'community', communityId: 8 },
+      ]);
+    });
+  });
+
   it('allows guests to view public communities but not private communities', async () => {
     useAuthStore.setState({ token: null, profile: null, sessionExpired: false });
     getCommunity.mockResolvedValue({
@@ -320,28 +385,100 @@ describe('role-restricted routes', () => {
     expect(await screen.findByText('Reviewing reports isn’t in the app yet. You can review them on the Orbis website in the meantime.')).toBeTruthy();
   });
 
-  it('keeps community settings to the owner and admins', async () => {
+  it('lets community members edit their own community settings', async () => {
+    useAuthStore.setState({
+      token: 'token',
+      profile: profile(false),
+      sessionExpired: false,
+    });
     getCommunity.mockResolvedValue({ id: 5, name: 'Konoha', iconUrl: null, role: 'member' });
 
     await renderRouter(routes, { initialUrl: '/communities/5' });
-    await act(() => router.push('/communities/5/settings' as Href));
+    await fireEvent.press(await screen.findByText('Your settings'));
 
-    expect(await screen.findByText('Only the owner and admins can make changes to Konoha.')).toBeTruthy();
-    await fireEvent.press(screen.getByText('Back to community'));
-    expect(await screen.findByText(/Konoha/)).toBeTruthy();
-    expect(screen).toHavePathname('/communities/5');
+    expect(await screen.findByText('Your community settings')).toBeTruthy();
+    expect(await screen.findByText('Nickname')).toBeTruthy();
+    expect(screen.queryByText('Community settings')).toBeNull();
+    expect(getMembers).toHaveBeenCalledWith('token', 5);
+  });
 
-    await act(() => router.back());
-    expect(await screen.findByText('Home')).toBeTruthy();
+  it('saves a community nickname and library-sharing preference', async () => {
+    useAuthStore.setState({
+      token: 'token',
+      profile: profile(false),
+      sessionExpired: false,
+    });
+    getCommunity.mockResolvedValue({
+      id: 5,
+      name: 'Konoha',
+      iconUrl: null,
+      role: 'member',
+      showLibraryUpdates: true,
+    });
+
+    await renderRouter(routes, { initialUrl: '/communities/5/member-settings' });
+    await screen.findByText('Your community settings');
+    await fireEvent.changeText(screen.getByLabelText('Community nickname'), 'Leaf');
+    await fireEvent.press(screen.getByText('Save nickname'));
+    expect(await screen.findByText('Nickname saved.')).toBeTruthy();
+    await fireEvent(screen.getByLabelText('Share library updates with Konoha'), 'valueChange', false);
+
+    await waitFor(() => {
+      expect(setNickname).toHaveBeenCalledWith('token', 5, 'Leaf');
+      expect(setShowLibraryUpdates).toHaveBeenCalledWith('token', 5, false);
+    });
+  });
+
+  it('shows member names and roles in the community member list', async () => {
+    useAuthStore.setState({
+      token: 'token',
+      profile: profile(false),
+      sessionExpired: false,
+    });
+    getCommunity.mockResolvedValue({ id: 5, name: 'Konoha', iconUrl: null, role: 'member' });
+    getMembers.mockResolvedValue([{
+      userId: 1,
+      username: 'naruto',
+      name: 'Naruto',
+      avatarUrl: null,
+      coverUrl: null,
+      isVerified: false,
+      online: true,
+      status: 'online',
+      nickname: 'Leaf',
+      joinedAt: '2026-10-01T00:00:00.000Z',
+      isOwner: true,
+      isAdmin: false,
+    }]);
+
+    await renderRouter(routes, { initialUrl: '/communities/5/members' });
+
+    expect(await screen.findByText('Konoha members')).toBeTruthy();
+    expect(screen.getByText('Leaf')).toBeTruthy();
+    expect(screen.getByText('@naruto · Owner')).toBeTruthy();
   });
 
   it('opens community settings for a community admin', async () => {
+    useAuthStore.setState({
+      token: 'token',
+      profile: profile(false),
+      sessionExpired: false,
+    });
     getCommunity.mockResolvedValue({ id: 5, name: 'Konoha', iconUrl: null, role: 'admin' });
 
     await renderRouter(routes, { initialUrl: '/communities/5/settings' });
 
     expect(await screen.findByText('Admins')).toBeTruthy();
     expect(getCommunity).toHaveBeenCalledWith('token', '5');
+  });
+
+  it('keeps community management settings restricted to owners and admins', async () => {
+    getCommunity.mockResolvedValue({ id: 5, name: 'Konoha', iconUrl: null, role: 'member' });
+
+    await renderRouter(routes, { initialUrl: '/communities/5/settings' });
+
+    expect(await screen.findByText('You don’t have access.')).toBeTruthy();
+    expect(screen.getByText('Only the owner and admins can make changes to Konoha.')).toBeTruthy();
   });
 
   it('treats a missing or hidden community as no access', async () => {

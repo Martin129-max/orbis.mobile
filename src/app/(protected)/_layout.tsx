@@ -23,8 +23,11 @@ const titles: Record<string, string> = {
   reports: 'Reports',
   'users/[username]': 'Profile',
   'communities/[communityId]': 'Community',
+  'communities/[communityId]/members': 'Members',
+  'communities/[communityId]/member-settings': 'Your community settings',
   'communities/[communityId]/settings': 'Community settings',
   'communities/create': 'Create a community',
+  'library/[type]/[sourceId]': 'Title discussions',
 };
 
 export default function ProtectedLayout() {

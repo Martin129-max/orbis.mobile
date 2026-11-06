@@ -25,6 +25,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import { EmailConfirmNotice } from './email-confirm-notice';
 import { FeedCard } from './feed-card';
+import { PostComposer } from './post-composer';
 
 function entryKey(item: FeedEntry) {
   return `${item.type}-${item.id}`;
@@ -42,12 +43,9 @@ export function HomeFeed() {
   const [loadedPreferencesVersion, setLoadedPreferencesVersion] = useState(-1);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communityId, setCommunityId] = useState<number | null>(null);
-  const [content, setContent] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [posting, setPosting] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [communityError, setCommunityError] = useState<string | null>(null);
@@ -190,29 +188,17 @@ export function HomeFeed() {
     }
   }, [loadedPreferencesVersion, nextCursor, preferencesPending, preferencesVersion, token]);
 
-  async function handlePost() {
-    if (!token || !profile || posting) return;
-    const message = content.trim();
-    const url = linkUrl.trim();
-    if (!message && !url) {
-      setActionError('Write something or add a link before posting.');
-      return;
-    }
-
-    setPosting(true);
+  async function handlePost(message: string, url?: string) {
+    if (!token || !profile) throw new Error('Your account could not be loaded. Please try again.');
+    const post = communityId === null
+      ? await createWallPost(token, profile.username, message, url)
+      : await createCommunityPost(token, communityId, message, url);
+    setItems((current) => [post, ...(current ?? []).filter((item) => entryKey(item) !== entryKey(post))]);
     setActionError(null);
-    try {
-      const post = communityId === null
-        ? await createWallPost(token, profile.username, message, url || undefined)
-        : await createCommunityPost(token, communityId, message, url || undefined);
-      setItems((current) => [post, ...(current ?? []).filter((item) => entryKey(item) !== entryKey(post))]);
-      setContent('');
-      setLinkUrl('');
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not post. Please try again.');
-    } finally {
-      setPosting(false);
-    }
+  }
+
+  function handleFeedChange(updated: FeedEntry) {
+    setItems((current) => current?.map((item) => entryKey(item) === entryKey(updated) ? updated : item) ?? null);
   }
 
   async function handleLike(item: FeedEntry) {
@@ -262,25 +248,6 @@ export function HomeFeed() {
       ) : profile ? (
         <View style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.divider }]}>
           <Atom.ThemedText type="smallBold">Share an update</Atom.ThemedText>
-          <Atom.Input
-            accessibilityLabel="Post content"
-            multiline
-            maxLength={20_000}
-            placeholder="What’s on your mind?"
-            textAlignVertical="top"
-            value={content}
-            onChangeText={setContent}
-            style={styles.contentInput}
-          />
-          <Atom.Input
-            accessibilityLabel="Link URL"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            placeholder="Add a link (optional)"
-            value={linkUrl}
-            onChangeText={setLinkUrl}
-          />
           {communities.length > 0 ? (
             <View style={styles.destinationSection}>
               <Atom.ThemedText type="small" themeColor="textSecondary">
@@ -305,17 +272,7 @@ export function HomeFeed() {
           ) : null}
           {communityError ? <Atom.ErrorMessage>{communityError}</Atom.ErrorMessage> : null}
           {actionError ? <Atom.ErrorMessage>{actionError}</Atom.ErrorMessage> : null}
-          <View style={styles.composerFooter}>
-            <Atom.ThemedText type="small" themeColor="textSecondary">
-              {content.length}/20,000
-            </Atom.ThemedText>
-            <Atom.Button
-              label="Post"
-              loading={posting}
-              disabled={(!content.trim() && !linkUrl.trim()) || !profile}
-              onPress={handlePost}
-            />
-          </View>
+          <PostComposer placeholder="What’s on your mind?" onPost={handlePost} />
         </View>
       ) : accountError ? (
         <Atom.ErrorMessage>{accountError}</Atom.ErrorMessage>
@@ -337,7 +294,12 @@ export function HomeFeed() {
         data={visibleItems ?? []}
         keyExtractor={entryKey}
         renderItem={({ item }) => (
-          <FeedCard item={item} onLike={handleLike} />
+          <FeedCard
+            item={item}
+            onLike={handleLike}
+            onChange={handleFeedChange}
+            canComment={item.type !== 'post' || item.communityId === null || communities.some((community) => community.id === item.communityId)}
+          />
         )}
         ListHeaderComponent={header}
         ListEmptyComponent={
@@ -461,11 +423,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: Spacing.three,
   },
-  contentInput: {
-    minHeight: 88,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
-  },
   destinationSection: {
     gap: Spacing.one,
   },
@@ -480,12 +437,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     paddingHorizontal: Spacing.two,
-  },
-  composerFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
   },
   profileLoading: {
     flexDirection: 'row',

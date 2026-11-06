@@ -97,7 +97,18 @@ export type Community = {
   showTwitchClips?: boolean;
   showDiscordOnline?: boolean;
   showDiscordInvite?: boolean;
+  showLibraryUpdates?: boolean;
 };
+
+export type RailFolder = {
+  type: 'folder';
+  id: number;
+  name: string | null;
+  color: string | null;
+  communityIds: number[];
+};
+
+export type RailItem = { type: 'community'; communityId: number } | RailFolder;
 
 export type CommunityPerson = {
   id: number;
@@ -198,6 +209,22 @@ export type PresenceStatus = 'online' | 'idle' | 'busy' | 'streaming' | 'offline
 export type LibraryStatus = 'current' | 'completed' | 'on_hold' | 'dropped' | 'planned';
 export type MediaType = 'anime' | 'manga' | 'game';
 
+export type Member = {
+  userId: number;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  isVerified: boolean;
+  online: boolean;
+  status: PresenceStatus;
+  playing?: string | null;
+  nickname: string | null;
+  joinedAt: string;
+  isOwner: boolean;
+  isAdmin: boolean;
+};
+
 export type PublicProfile = {
   userId: number;
   username: string;
@@ -268,6 +295,20 @@ export type Clip = {
 
 export type ClipPage = { items: Clip[]; nextCursor: string | null };
 
+export type MediaProfile = {
+  type: MediaType;
+  sourceId: string;
+  title: string;
+  coverImage: string | null;
+  year: number | null;
+  score: number | null;
+  altTitles: string[];
+  synopsis: string | null;
+  bannerImage: string | null;
+  releaseStatus: string | null;
+  genres: string[];
+};
+
 export type Activity = {
   type: 'activity';
   id: number;
@@ -290,6 +331,29 @@ export type Activity = {
 export type FeedEntry = Post | Activity;
 
 export type FeedContentType = FeedEntry['type'];
+
+export type Commentable = { type: FeedEntry['type']; id: number };
+
+export type Comment = {
+  id: number;
+  parentId: number | null;
+  content: string;
+  linkUrl: string | null;
+  likeCount: number;
+  liked: boolean;
+  hidden?: 'review' | 'reported' | null;
+  deleted?: boolean;
+  createdAt: string;
+  author: Author;
+};
+
+export type LinkPreview = {
+  url: string;
+  title: string;
+  description: string | null;
+  image: string | null;
+  siteName: string;
+};
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
@@ -673,6 +737,34 @@ export async function createCommunity(
   return res.json();
 }
 
+export async function getRailLayout(token: string): Promise<RailItem[]> {
+  const res = await api('/communities/layout', { headers: authHeaders(token) });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your communities.'));
+  return res.json();
+}
+
+export async function updateRailLayout(token: string, layout: RailItem[]): Promise<RailItem[]> {
+  const items = layout.map((item) =>
+    item.type === 'community'
+      ? { communityId: item.communityId }
+      : {
+          folder: {
+            ...(item.id > 0 && { id: item.id }),
+            name: item.name ?? undefined,
+            color: item.color ?? undefined,
+            communityIds: item.communityIds,
+          },
+        },
+  );
+  const res = await api('/communities/layout', {
+    method: 'PUT',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your communities.'));
+  return res.json();
+}
+
 export async function getCommunity(token: string | null, id: string): Promise<Community | null> {
   const res = await api(`/communities/${encodeURIComponent(id)}`, { headers: authHeaders(token) });
   if (res.status === 403 || res.status === 404) return null;
@@ -818,6 +910,50 @@ export async function joinCommunity(token: string, communityId: number): Promise
   return res.json();
 }
 
+export async function getMembers(token: string, communityId: number): Promise<Member[]> {
+  const res = await api(`/communities/${communityId}/members`, {
+    headers: authHeaders(token),
+  });
+  if (res.status === 403) {
+    throw new Error(await errorMessage(res, 'You must be a community member to view its members.'));
+  }
+  if (res.status === 404) {
+    throw new Error(await errorMessage(res, 'This community is no longer available.'));
+  }
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load community members.'));
+  return res.json();
+}
+
+export async function setShowLibraryUpdates(
+  token: string,
+  communityId: number,
+  show: boolean,
+): Promise<{ showLibraryUpdates: boolean }> {
+  const res = await api(`/communities/${communityId}/library-updates`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ show }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not save your library update setting.'));
+  }
+  return res.json();
+}
+
+export async function setNickname(
+  token: string,
+  communityId: number,
+  nickname: string | null,
+): Promise<{ nickname: string | null }> {
+  const res = await api(`/communities/${communityId}/nickname`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your nickname.'));
+  return res.json();
+}
+
 export async function getDirectoryUsers(
   token: string,
   page: number,
@@ -898,6 +1034,36 @@ export async function getCommunityPosts(
   return res.json();
 }
 
+export async function getMediaProfile(
+  token: string | null,
+  type: MediaType,
+  sourceId: string,
+): Promise<MediaProfile | null> {
+  const res = await api(
+    `/library/media/${encodeURIComponent(type)}/${encodeURIComponent(sourceId)}`,
+    { headers: authHeaders(token) },
+  );
+  if (res.status === 400 || res.status === 404) return null;
+  if (res.status === 403) throw new Error('This title is 18+. Check your adult-content settings.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load this title.'));
+  return res.json();
+}
+
+export async function getMediaPosts(
+  token: string | null,
+  type: MediaType,
+  sourceId: string,
+  cursor?: string,
+): Promise<Page<FeedEntry>> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : '';
+  const res = await api(
+    `/library/media/${encodeURIComponent(type)}/${encodeURIComponent(sourceId)}/posts${query}`,
+    { headers: authHeaders(token) },
+  );
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load title discussions.'));
+  return res.json();
+}
+
 export async function createWallPost(
   token: string,
   username: string,
@@ -930,9 +1096,69 @@ export async function createCommunityPost(
   return res.json();
 }
 
+export async function getComments(
+  token: string | null,
+  target: Commentable,
+): Promise<Comment[]> {
+  const query = new URLSearchParams({ type: target.type, id: String(target.id) });
+  const res = await api(`/comments?${query.toString()}`, { headers: authHeaders(token) });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load comments.'));
+  return res.json();
+}
+
+export async function createComment(
+  token: string,
+  target: Commentable,
+  content: string,
+  parentId?: number,
+  linkUrl?: string,
+): Promise<Comment> {
+  const res = await api('/comments', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...target, content, parentId, linkUrl }),
+  });
+  if (res.status === 400) throw new Error('Write something before commenting.');
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not post the comment. Please try again.'));
+  }
+  return res.json();
+}
+
+export async function getLinkPreview(
+  token: string | null,
+  url: string,
+): Promise<LinkPreview | null> {
+  const query = new URLSearchParams({ url });
+  const res = await api(`/links/preview?${query.toString()}`, { headers: authHeaders(token) });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load the link preview.'));
+  return res.json();
+}
+
+export async function createMediaPost(
+  token: string,
+  type: MediaType,
+  sourceId: string,
+  content: string,
+  linkUrl?: string,
+): Promise<Post> {
+  const res = await api(
+    `/library/media/${encodeURIComponent(type)}/${encodeURIComponent(sourceId)}/posts`,
+    {
+      method: 'POST',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, linkUrl }),
+    },
+  );
+  if (res.status === 400) throw new Error('Write something before posting.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not post. Please try again.'));
+  return res.json();
+}
+
 export async function setLike(
   token: string,
-  type: 'post' | 'activity',
+  type: 'post' | 'activity' | 'comment',
   id: number,
   liked: boolean,
 ): Promise<{ liked: boolean; likeCount: number }> {
