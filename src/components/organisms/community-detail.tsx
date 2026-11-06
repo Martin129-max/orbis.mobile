@@ -215,11 +215,18 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
             ) : null}
           </>
         ) : canManage ? (
-          <Atom.Button
-            label="Community settings"
-            variant="secondary"
-            onPress={() => router.push(`/communities/${id}/settings` as Href)}
-          />
+          <View style={styles.managerActions}>
+            <Atom.Button
+              label="Community settings"
+              variant="secondary"
+              onPress={() => router.push(`/communities/${id}/settings` as Href)}
+            />
+            <Atom.Button
+              label="Invite members"
+              variant="secondary"
+              onPress={() => router.push(`/communities/${id}/invites` as Href)}
+            />
+          </View>
         ) : null}
         {joinError ? <Atom.ErrorMessage>{joinError}</Atom.ErrorMessage> : null}
       </View>
@@ -273,6 +280,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: Spacing.three,
     gap: Spacing.three,
+  },
+  managerActions: {
+    gap: Spacing.two,
   },
   heading: {
     flexDirection: 'row',
