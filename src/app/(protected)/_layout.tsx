@@ -24,6 +24,7 @@ const titles: Record<string, string> = {
   'users/[username]': 'Profile',
   'communities/[communityId]': 'Community',
   'communities/[communityId]/settings': 'Community settings',
+  'communities/create': 'Create a community',
 };
 
 export default function ProtectedLayout() {

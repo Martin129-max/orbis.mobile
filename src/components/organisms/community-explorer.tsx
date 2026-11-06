@@ -1,5 +1,5 @@
-import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Atom from '@atom';
 
@@ -133,11 +133,17 @@ export function CommunityExplorer() {
   const [joining, setJoining] = useState<number | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const hasFocused = useRef(false);
   const normalizedQuery = query.trim();
   const requestKey = `${token ?? ''}:${normalizedQuery}:${attempt}`;
   const current = loaded?.key === requestKey ? loaded.results : null;
   const error = loaded?.key === requestKey ? loaded.error : null;
   const readOnly = !profile || profile.emailVerifiedAt === null;
+
+  useFocusEffect(useCallback(() => {
+    if (hasFocused.current) setAttempt((value) => value + 1);
+    else hasFocused.current = true;
+  }, []));
 
   useEffect(() => {
     if (!token) return;
@@ -180,10 +186,17 @@ export function CommunityExplorer() {
   return (
     <View style={styles.page}>
       <View style={styles.heading}>
-        <Atom.ThemedText type="subtitle">Explore</Atom.ThemedText>
-        <Atom.ThemedText type="small" themeColor="textSecondary">
-          Find public communities and the people in them.
-        </Atom.ThemedText>
+        <View style={styles.headingCopy}>
+          <Atom.ThemedText type="subtitle">Explore</Atom.ThemedText>
+          <Atom.ThemedText type="small" themeColor="textSecondary">
+            Find public communities and the people in them.
+          </Atom.ThemedText>
+        </View>
+        <Atom.Button
+          label="Create"
+          variant="secondary"
+          onPress={() => router.push('/communities/create' as Href)}
+        />
       </View>
       <Atom.Input
         accessibilityLabel="Search public communities"
@@ -242,6 +255,13 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   heading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  headingCopy: {
+    flex: 1,
     gap: Spacing.one,
   },
   state: {

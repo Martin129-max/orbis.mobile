@@ -31,6 +31,7 @@ jest.mock('@/lib/api', () => ({
   ...jest.requireActual('@/lib/api'),
   getProfile: jest.fn(),
   getCommunity: jest.fn(),
+  getCommunityMembers: jest.fn(),
   getCommunityPosts: jest.fn(),
   getDirectoryUsers: jest.fn(),
   getDirectoryCommunities: jest.fn(),
@@ -40,6 +41,7 @@ jest.mock('@/lib/api', () => ({
 
 const getProfile = api.getProfile as jest.Mock;
 const getCommunity = api.getCommunity as jest.Mock;
+const getCommunityMembers = api.getCommunityMembers as jest.Mock;
 const getCommunityPosts = api.getCommunityPosts as jest.Mock;
 const getDirectoryUsers = api.getDirectoryUsers as jest.Mock;
 const getDirectoryCommunities = api.getDirectoryCommunities as jest.Mock;
@@ -92,6 +94,7 @@ describe('role-restricted routes', () => {
     jest.clearAllMocks();
     useAuthStore.setState({ token: 'token', profile: null, sessionExpired: false });
     getCommunityPosts.mockResolvedValue({ items: [], nextCursor: null });
+    getCommunityMembers.mockResolvedValue([]);
     getDirectoryUsers.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     getDirectoryCommunities.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     searchCommunities.mockResolvedValue([]);
@@ -337,7 +340,7 @@ describe('role-restricted routes', () => {
 
     await renderRouter(routes, { initialUrl: '/communities/5/settings' });
 
-    expect(await screen.findByText('Community settings aren’t in the app yet. You can change them on the Orbis website in the meantime.')).toBeTruthy();
+    expect(await screen.findByText('Admins')).toBeTruthy();
     expect(getCommunity).toHaveBeenCalledWith('token', '5');
   });
 
