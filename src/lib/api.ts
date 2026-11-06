@@ -77,7 +77,18 @@ export type Community = {
   isPublic?: boolean;
   isVerified?: boolean;
   memberCount?: number;
+  showLibraryUpdates?: boolean;
 };
+
+export type RailFolder = {
+  type: 'folder';
+  id: number;
+  name: string | null;
+  color: string | null;
+  communityIds: number[];
+};
+
+export type RailItem = { type: 'community'; communityId: number } | RailFolder;
 
 export type CommunityPerson = {
   id: number;
@@ -162,6 +173,22 @@ export type Post = {
 export type PresenceStatus = 'online' | 'idle' | 'busy' | 'streaming' | 'offline';
 export type LibraryStatus = 'current' | 'completed' | 'on_hold' | 'dropped' | 'planned';
 export type MediaType = 'anime' | 'manga' | 'game';
+
+export type Member = {
+  userId: number;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  isVerified: boolean;
+  online: boolean;
+  status: PresenceStatus;
+  playing?: string | null;
+  nickname: string | null;
+  joinedAt: string;
+  isOwner: boolean;
+  isAdmin: boolean;
+};
 
 export type PublicProfile = {
   userId: number;
@@ -656,6 +683,34 @@ export async function getCommunities(token: string): Promise<Community[]> {
   return res.json();
 }
 
+export async function getRailLayout(token: string): Promise<RailItem[]> {
+  const res = await api('/communities/layout', { headers: authHeaders(token) });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your communities.'));
+  return res.json();
+}
+
+export async function updateRailLayout(token: string, layout: RailItem[]): Promise<RailItem[]> {
+  const items = layout.map((item) =>
+    item.type === 'community'
+      ? { communityId: item.communityId }
+      : {
+          folder: {
+            ...(item.id > 0 && { id: item.id }),
+            name: item.name ?? undefined,
+            color: item.color ?? undefined,
+            communityIds: item.communityIds,
+          },
+        },
+  );
+  const res = await api('/communities/layout', {
+    method: 'PUT',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your communities.'));
+  return res.json();
+}
+
 export async function getCommunity(token: string | null, id: string): Promise<Community | null> {
   const res = await api(`/communities/${encodeURIComponent(id)}`, { headers: authHeaders(token) });
   if (res.status === 403 || res.status === 404) return null;
@@ -695,6 +750,50 @@ export async function joinCommunity(token: string, communityId: number): Promise
   });
   if (res.status === 404) throw new Error('This community is no longer public.');
   if (!res.ok) throw new Error(await errorMessage(res, 'Could not join the community.'));
+  return res.json();
+}
+
+export async function getMembers(token: string, communityId: number): Promise<Member[]> {
+  const res = await api(`/communities/${communityId}/members`, {
+    headers: authHeaders(token),
+  });
+  if (res.status === 403) {
+    throw new Error(await errorMessage(res, 'You must be a community member to view its members.'));
+  }
+  if (res.status === 404) {
+    throw new Error(await errorMessage(res, 'This community is no longer available.'));
+  }
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load community members.'));
+  return res.json();
+}
+
+export async function setShowLibraryUpdates(
+  token: string,
+  communityId: number,
+  show: boolean,
+): Promise<{ showLibraryUpdates: boolean }> {
+  const res = await api(`/communities/${communityId}/library-updates`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ show }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not save your library update setting.'));
+  }
+  return res.json();
+}
+
+export async function setNickname(
+  token: string,
+  communityId: number,
+  nickname: string | null,
+): Promise<{ nickname: string | null }> {
+  const res = await api(`/communities/${communityId}/nickname`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not save your nickname.'));
   return res.json();
 }
 

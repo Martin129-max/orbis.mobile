@@ -10,15 +10,20 @@ import {
   getLinkPreview,
   getMediaPosts,
   getMediaProfile,
+  getMembers,
   getProfile,
+  getRailLayout,
   getUserPosts,
   joinCommunity,
   login,
   searchPeople,
   searchCommunities,
   setLike,
+  setNickname,
   setProfileVerified,
+  setShowLibraryUpdates,
   setUnauthorizedHandler,
+  updateRailLayout,
 } from '../api';
 
 function respond(status: number, body: unknown) {
@@ -118,6 +123,56 @@ describe('api requests', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/communities/search?q=leaf+village');
     expect(String(fetchMock.mock.calls[1][0])).toContain('/communities/5/join');
     expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+  });
+
+  it('loads and saves the server community layout contract', async () => {
+    const layout = [
+      { type: 'community', communityId: 5 },
+      { type: 'folder', id: 8, name: 'Friends', color: '#5b8def', communityIds: [6, 7] },
+    ];
+    fetchMock
+      .mockReturnValueOnce(respond(200, layout))
+      .mockReturnValueOnce(respond(200, layout));
+
+    await expect(getRailLayout('token')).resolves.toEqual(layout);
+    await updateRailLayout('token', [
+      { type: 'community', communityId: 5 },
+      { type: 'folder', id: -10, name: 'Friends', color: null, communityIds: [6, 7] },
+    ]);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/communities/layout');
+    expect(fetchMock.mock.calls[1][1].method).toBe('PUT');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      items: [
+        { communityId: 5 },
+        { folder: { name: 'Friends', communityIds: [6, 7] } },
+      ],
+    });
+  });
+
+  it('uses server member and personal community-setting endpoints', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(200, [{ userId: 7, nickname: null }]))
+      .mockReturnValueOnce(respond(200, { nickname: 'Leaf' }))
+      .mockReturnValueOnce(respond(200, { showLibraryUpdates: false }));
+
+    await getMembers('token', 5);
+    await setNickname('token', 5, 'Leaf');
+    await setShowLibraryUpdates('token', 5, false);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/communities/5/members');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/communities/5/nickname');
+    expect(fetchMock.mock.calls[1][1].method).toBe('PATCH');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ nickname: 'Leaf' });
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/communities/5/library-updates');
+    expect(fetchMock.mock.calls[2][1].method).toBe('PATCH');
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ show: false });
+  });
+
+  it('reports member-list access failures instead of showing an empty list', async () => {
+    fetchMock.mockReturnValue(respond(403, { message: 'Not a member' }));
+
+    await expect(getMembers('token', 5)).rejects.toThrow('Not a member.');
   });
 
   it('uses existing admin directory and verification endpoints', async () => {

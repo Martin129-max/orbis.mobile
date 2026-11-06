@@ -8,6 +8,7 @@ import { useCurrentProfile } from '@/hooks/use-current-profile';
 import { useTheme } from '@/hooks/use-theme';
 import { joinCommunity, searchCommunities, type CommunitySearchResult } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+import { CommunitySwitcher } from './community-switcher';
 
 function displayName(person: CommunitySearchResult['members'][number]) {
   return person.name || person.username;
@@ -133,6 +134,7 @@ export function CommunityExplorer() {
   const [joining, setJoining] = useState<number | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [joinedVersion, setJoinedVersion] = useState(0);
   const normalizedQuery = query.trim();
   const requestKey = `${token ?? ''}:${normalizedQuery}:${attempt}`;
   const current = loaded?.key === requestKey ? loaded.results : null;
@@ -169,6 +171,7 @@ export function CommunityExplorer() {
     setJoinError(null);
     try {
       await joinCommunity(token, community.id);
+      setJoinedVersion((value) => value + 1);
       router.push(`/communities/${community.id}` as Href);
     } catch (cause) {
       setJoinError(cause instanceof Error ? cause.message : 'Could not join the community.');
@@ -179,6 +182,7 @@ export function CommunityExplorer() {
 
   return (
     <View style={styles.page}>
+      <CommunitySwitcher refreshKey={joinedVersion} />
       <View style={styles.heading}>
         <Atom.ThemedText type="subtitle">Explore</Atom.ThemedText>
         <Atom.ThemedText type="small" themeColor="textSecondary">
