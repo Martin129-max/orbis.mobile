@@ -26,6 +26,7 @@ const titles: Record<string, string> = {
   'communities/[communityId]/members': 'Members',
   'communities/[communityId]/member-settings': 'Your community settings',
   'communities/[communityId]/settings': 'Community settings',
+  'library/[type]/[sourceId]': 'Title discussions',
 };
 
 export default function ProtectedLayout() {
