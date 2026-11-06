@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,6 +18,7 @@ import * as Template from '@template';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { FeedCard } from '@/components/organisms/feed-card';
+import { presenceLabel, presenceStatus } from '@/lib/presence';
 import {
   getPublicProfile,
   getUserClips,
@@ -33,6 +34,7 @@ import {
   type PublicProfile,
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+import { useFriendsStore } from '@/stores/friends-store';
 
 const profileTabs = [
   { value: 'posts', label: 'Posts' },
@@ -48,7 +50,12 @@ const postTypes: { value: FeedContentType; label: string }[] = [
 ];
 
 type ProfileTab = (typeof profileTabs)[number]['value'];
-type ProfileState = { username: string; profile: PublicProfile | null; failed?: boolean };
+type ProfileState = {
+  username: string;
+  requestKey: string;
+  profile: PublicProfile | null;
+  failed?: boolean;
+};
 
 const libraryStatuses: LibraryStatus[] = ['current', 'completed', 'on_hold', 'dropped', 'planned'];
 const libraryStatusLabels: Record<LibraryStatus, string> = {
@@ -93,6 +100,11 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const preferencesVersion = useAuthStore((state) => state.preferencesVersion);
   const logout = useAuthStore((state) => state.logout);
   const fetchCurrentProfile = useAuthStore((state) => state.fetchProfile);
+  const liveFriends = useFriendsStore((state) => state.friends);
+  const livePresence = useMemo(
+    () => new Map(liveFriends.map((friend) => [friend.userId, friend])),
+    [liveFriends],
+  );
   const theme = useTheme();
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const [loaded, setLoaded] = useState<ProfileState | null>(null);
@@ -109,7 +121,12 @@ export function MemberProfile({ username: initialUsername }: { username?: string
   const [pendingImage, setPendingImage] = useState<ProfileImage | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [profileAttempt, setProfileAttempt] = useState(0);
-  const currentLoaded = !preferencesPending && loaded?.username === username ? loaded : null;
+  const profileRequestKey = `${preferencesVersion}:${profileAttempt}`;
+  const currentLoaded = !preferencesPending &&
+    loaded?.username === username &&
+    loaded.requestKey === profileRequestKey
+    ? loaded
+    : null;
   const profile = currentLoaded?.profile ?? null;
   const activeTab =
     isProfileTab(requestedTab) &&
@@ -133,20 +150,20 @@ export function MemberProfile({ username: initialUsername }: { username?: string
     }
   }, [fetchCurrentProfile, signedInProfile, token]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (preferencesPending) return;
     let active = true;
     getPublicProfile(token, username)
       .then((result) => {
-        if (active) setLoaded({ username, profile: result });
+        if (active) setLoaded({ username, requestKey: profileRequestKey, profile: result });
       })
       .catch(() => {
-        if (active) setLoaded({ username, profile: null, failed: true });
+        if (active) setLoaded({ username, requestKey: profileRequestKey, profile: null, failed: true });
       });
     return () => {
       active = false;
     };
-  }, [preferencesPending, preferencesVersion, profileAttempt, token, username]);
+  }, [preferencesPending, profileRequestKey, token, username]));
 
   useEffect(() => {
     if (!contentUsername) return;
@@ -434,6 +451,11 @@ export function MemberProfile({ username: initialUsername }: { username?: string
               variant="secondary"
               onPress={() => router.push('/settings' as Href)}
             />
+            <Atom.Button
+              label="Friends & requests"
+              variant="secondary"
+              onPress={() => router.push('/friends' as Href)}
+            />
             {signedInProfile?.isAdmin ? (
               <Atom.Button
                 label="Site admin directory"
@@ -648,7 +670,10 @@ export function MemberProfile({ username: initialUsername }: { username?: string
                           {friend.name || friend.username}{friend.isVerified ? ' · Verified' : ''}
                         </Atom.ThemedText>
                         <Atom.ThemedText type="small" themeColor="textSecondary">
-                          @{friend.username} · {friend.online ? friend.status : 'offline'}
+                          @{friend.username} · {presenceLabel(presenceStatus(
+                            livePresence.get(friend.userId)?.online ?? friend.online,
+                            livePresence.get(friend.userId)?.status ?? friend.status,
+                          ))}
                         </Atom.ThemedText>
                       </View>
                     </Pressable>

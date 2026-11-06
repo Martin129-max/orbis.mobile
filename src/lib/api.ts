@@ -160,8 +160,32 @@ export type Post = {
 };
 
 export type PresenceStatus = 'online' | 'idle' | 'busy' | 'streaming' | 'offline';
+export type UserStatus = Exclude<PresenceStatus, 'offline' | 'streaming'>;
 export type LibraryStatus = 'current' | 'completed' | 'on_hold' | 'dropped' | 'planned';
 export type MediaType = 'anime' | 'manga' | 'game';
+
+export type FriendUser = {
+  userId: number;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  isVerified?: boolean;
+};
+
+export type Friend = FriendUser & {
+  online: boolean;
+  status: PresenceStatus;
+  playing?: string | null;
+  twitchLogin?: string | null;
+};
+
+export type FriendList = {
+  friends: Friend[];
+  incoming: FriendUser[];
+  outgoing: FriendUser[];
+};
+
+export type FriendTarget = { userId: number } | { username: string };
 
 export type PublicProfile = {
   userId: number;
@@ -630,13 +654,42 @@ export function canManage(community: Community) {
   return community.role === 'owner' || community.role === 'admin';
 }
 
-export async function searchPeople(token: string, query: string): Promise<Author[]> {
+export async function searchPeople(token: string, query: string): Promise<FriendUser[]> {
   const params = new URLSearchParams({ q: query });
   const res = await api(`/friends/search?${params.toString()}`, {
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error('Could not search people.');
   return res.json();
+}
+
+export async function getFriends(token: string): Promise<FriendList> {
+  const res = await api('/friends', { headers: authHeaders(token) });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your friends.'));
+  return res.json();
+}
+
+export async function addFriend(token: string, target: FriendTarget): Promise<void> {
+  const res = await api('/friends', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(target),
+  });
+  if (res.status === 404) throw new Error('No one with that username is on Orbis.');
+  if (res.status === 400 || res.status === 409) {
+    throw new Error(await errorMessage(res, 'That friendship request is not valid.'));
+  }
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not send the request. Please try again.'));
+}
+
+export async function removeFriend(token: string, userId: number): Promise<void> {
+  const res = await api(`/friends/${userId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(await errorMessage(res, 'Could not update your friends. Please try again.'));
+  }
 }
 
 export async function searchCommunities(
