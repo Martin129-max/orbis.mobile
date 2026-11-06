@@ -1,6 +1,11 @@
 import {
   api,
+  acceptMessageRequest,
   createWallPost,
+  declineMessageRequest,
+  editMessage,
+  getChatHistory,
+  getConversations,
   getCommunity,
   getCommunityPosts,
   getDirectoryUsers,
@@ -8,7 +13,12 @@ import {
   getUserPosts,
   joinCommunity,
   login,
+  markMessagesRead,
+  openDirectChat,
+  reactToMessage,
   searchCommunities,
+  searchChatPeople,
+  sendMessage,
   setProfileVerified,
   setUnauthorizedHandler,
 } from '../api';
@@ -143,5 +153,55 @@ describe('api requests', () => {
 
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBeUndefined();
+  });
+
+  it('uses the web messaging routes and cursor contract', async () => {
+    const conversation = { id: 8, status: 'accepted' };
+    const message = { id: 12, text: 'Hello' };
+    fetchMock
+      .mockReturnValueOnce(respond(200, [{ userId: 7, username: 'sakura' }]))
+      .mockReturnValueOnce(respond(200, [conversation]))
+      .mockReturnValueOnce(respond(200, conversation))
+      .mockReturnValueOnce(respond(200, { messages: [message], members: [], hasMore: true }))
+      .mockReturnValueOnce(respond(200, message))
+      .mockReturnValueOnce(respond(200, message))
+      .mockReturnValueOnce(respond(200, message))
+      .mockReturnValueOnce(respond(200, {}));
+
+    await searchChatPeople('token', 'sakura');
+    await getConversations('token');
+    await openDirectChat('token', 7);
+    await getChatHistory('token', 8, 12);
+    await sendMessage('token', 8, 'Hello', 11);
+    await editMessage('token', 8, 12, 'Updated');
+    await reactToMessage('token', 8, 12, '❤️');
+    await markMessagesRead('token', 8);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/friends/search?q=sakura');
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/messages$/);
+    expect(fetchMock.mock.calls[1][1].method).toBe('GET');
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/messages/direct/7');
+    expect(String(fetchMock.mock.calls[3][0])).toContain('/messages/8?before=12');
+    expect(JSON.parse(fetchMock.mock.calls[4][1].body)).toEqual({ text: 'Hello', replyToId: 11 });
+    expect(fetchMock.mock.calls[5][1].method).toBe('PATCH');
+    expect(String(fetchMock.mock.calls[6][0])).toContain('/messages/8/messages/12/reaction');
+    expect(String(fetchMock.mock.calls[7][0])).toContain('/messages/8/read');
+  });
+
+  it('accepts and declines message requests and reports failed message operations', async () => {
+    fetchMock
+      .mockReturnValueOnce(respond(200, {}))
+      .mockReturnValueOnce(respond(200, {}))
+      .mockReturnValueOnce(respond(403, { message: 'You cannot send messages to this person.' }));
+
+    await acceptMessageRequest('token', 8);
+    await declineMessageRequest('token', 8);
+    await expect(sendMessage('token', 8, 'Hello')).rejects.toThrow(
+      'You cannot send messages to this person.',
+    );
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/messages/8/accept');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/messages/8');
+    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
   });
 });

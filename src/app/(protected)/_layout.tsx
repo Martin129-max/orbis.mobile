@@ -21,6 +21,7 @@ const titles: Record<string, string> = {
   settings: 'Settings',
   directory: 'Directory',
   reports: 'Reports',
+  'messages/[conversationId]': 'Conversation',
   'users/[username]': 'Profile',
   'communities/[communityId]': 'Community',
   'communities/[communityId]/settings': 'Community settings',

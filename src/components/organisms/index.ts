@@ -7,6 +7,8 @@ export * from './directory-view';
 export * from './email-confirm-notice';
 export * from './feed-card';
 export * from './home-feed';
+export * from './chat-conversation';
+export * from './messages-inbox';
 export * from './member-profile';
 export * from './oauth-buttons';
 export * from './server-status';
