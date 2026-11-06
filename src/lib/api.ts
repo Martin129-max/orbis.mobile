@@ -233,6 +233,20 @@ export type Clip = {
 
 export type ClipPage = { items: Clip[]; nextCursor: string | null };
 
+export type MediaProfile = {
+  type: MediaType;
+  sourceId: string;
+  title: string;
+  coverImage: string | null;
+  year: number | null;
+  score: number | null;
+  altTitles: string[];
+  synopsis: string | null;
+  bannerImage: string | null;
+  releaseStatus: string | null;
+  genres: string[];
+};
+
 export type Activity = {
   type: 'activity';
   id: number;
@@ -255,6 +269,29 @@ export type Activity = {
 export type FeedEntry = Post | Activity;
 
 export type FeedContentType = FeedEntry['type'];
+
+export type Commentable = { type: FeedEntry['type']; id: number };
+
+export type Comment = {
+  id: number;
+  parentId: number | null;
+  content: string;
+  linkUrl: string | null;
+  likeCount: number;
+  liked: boolean;
+  hidden?: 'review' | 'reported' | null;
+  deleted?: boolean;
+  createdAt: string;
+  author: Author;
+};
+
+export type LinkPreview = {
+  url: string;
+  title: string;
+  description: string | null;
+  image: string | null;
+  siteName: string;
+};
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
@@ -741,6 +778,36 @@ export async function getCommunityPosts(
   return res.json();
 }
 
+export async function getMediaProfile(
+  token: string | null,
+  type: MediaType,
+  sourceId: string,
+): Promise<MediaProfile | null> {
+  const res = await api(
+    `/library/media/${encodeURIComponent(type)}/${encodeURIComponent(sourceId)}`,
+    { headers: authHeaders(token) },
+  );
+  if (res.status === 400 || res.status === 404) return null;
+  if (res.status === 403) throw new Error('This title is 18+. Check your adult-content settings.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load this title.'));
+  return res.json();
+}
+
+export async function getMediaPosts(
+  token: string | null,
+  type: MediaType,
+  sourceId: string,
+  cursor?: string,
+): Promise<Page<FeedEntry>> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : '';
+  const res = await api(
+    `/library/media/${encodeURIComponent(type)}/${encodeURIComponent(sourceId)}/posts${query}`,
+    { headers: authHeaders(token) },
+  );
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load title discussions.'));
+  return res.json();
+}
+
 export async function createWallPost(
   token: string,
   username: string,
@@ -773,9 +840,69 @@ export async function createCommunityPost(
   return res.json();
 }
 
+export async function getComments(
+  token: string | null,
+  target: Commentable,
+): Promise<Comment[]> {
+  const query = new URLSearchParams({ type: target.type, id: String(target.id) });
+  const res = await api(`/comments?${query.toString()}`, { headers: authHeaders(token) });
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load comments.'));
+  return res.json();
+}
+
+export async function createComment(
+  token: string,
+  target: Commentable,
+  content: string,
+  parentId?: number,
+  linkUrl?: string,
+): Promise<Comment> {
+  const res = await api('/comments', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...target, content, parentId, linkUrl }),
+  });
+  if (res.status === 400) throw new Error('Write something before commenting.');
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, 'Could not post the comment. Please try again.'));
+  }
+  return res.json();
+}
+
+export async function getLinkPreview(
+  token: string | null,
+  url: string,
+): Promise<LinkPreview | null> {
+  const query = new URLSearchParams({ url });
+  const res = await api(`/links/preview?${query.toString()}`, { headers: authHeaders(token) });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not load the link preview.'));
+  return res.json();
+}
+
+export async function createMediaPost(
+  token: string,
+  type: MediaType,
+  sourceId: string,
+  content: string,
+  linkUrl?: string,
+): Promise<Post> {
+  const res = await api(
+    `/library/media/${encodeURIComponent(type)}/${encodeURIComponent(sourceId)}/posts`,
+    {
+      method: 'POST',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, linkUrl }),
+    },
+  );
+  if (res.status === 400) throw new Error('Write something before posting.');
+  if (!res.ok) throw new Error(await errorMessage(res, 'Could not post. Please try again.'));
+  return res.json();
+}
+
 export async function setLike(
   token: string,
-  type: 'post' | 'activity',
+  type: 'post' | 'activity' | 'comment',
   id: number,
   liked: boolean,
 ): Promise<{ liked: boolean; likeCount: number }> {
