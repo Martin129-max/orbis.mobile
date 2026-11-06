@@ -1,5 +1,5 @@
-import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, type Href, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import * as Atom from '@atom';
 
@@ -8,6 +8,7 @@ import { useCurrentProfile } from '@/hooks/use-current-profile';
 import { useTheme } from '@/hooks/use-theme';
 import { useCommunity } from '@/hooks/use-community';
 import {
+  createCommunityPost,
   getCommunityPosts,
   joinCommunity,
   setLike,
@@ -15,6 +16,7 @@ import {
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { FeedCard } from './feed-card';
+import { PostComposer } from './post-composer';
 
 function entryKey(item: FeedEntry) {
   return `${item.type}-${item.id}`;
@@ -25,6 +27,7 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
   const token = useAuthStore((state) => state.token);
   const { profile, failed: profileFailed, retry: retryProfile } = useCurrentProfile();
   const { loading, community, failed, retry } = useCommunity(communityId);
+  const hasFocused = useRef(false);
   const [joinedCommunity, setJoinedCommunity] = useState<{
     key: string;
     role: 'member';
@@ -50,6 +53,11 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
   const currentCommunity = community && joinedCommunity?.key === `${token ?? ''}:${community.id}`
     ? { ...community, role: joinedCommunity.role, memberCount: joinedCommunity.memberCount }
     : community;
+
+  useFocusEffect(useCallback(() => {
+    if (hasFocused.current) retry();
+    else hasFocused.current = true;
+  }, [retry]));
 
   useEffect(() => {
     if (!Number.isInteger(id) || id <= 0) return;
@@ -142,6 +150,31 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
     }
   }
 
+  async function handlePost(content: string, linkUrl?: string) {
+    if (!token || !isPostingAllowed()) {
+      throw new Error('Confirm your email and join this community before posting.');
+    }
+    const post = await createCommunityPost(token, id, content, linkUrl);
+    setPostsPage((current) => current?.key === postsKey
+      ? { ...current, items: [post, ...current.items.filter((item) => entryKey(item) !== entryKey(post))] }
+      : current === null
+        ? { key: postsKey, items: [post], nextCursor: null, error: null }
+        : current);
+  }
+
+  function isPostingAllowed() {
+    return Boolean(currentCommunity?.role && profile?.emailVerifiedAt);
+  }
+
+  function handleFeedChange(updated: FeedEntry) {
+    setPostsPage((current) => current?.key === postsKey
+      ? {
+          ...current,
+          items: current.items.map((item) => entryKey(item) === entryKey(updated) ? updated : item),
+        }
+      : current);
+  }
+
   if (loading) {
     return (
       <View style={styles.state}>
@@ -214,23 +247,43 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
               </View>
             ) : null}
           </>
-        ) : canManage ? (
-          <View style={styles.managerActions}>
+        ) : (
+          <View style={styles.navigation}>
             <Atom.Button
-              label="Community settings"
+              label="Members"
               variant="secondary"
-              onPress={() => router.push(`/communities/${id}/settings` as Href)}
+              onPress={() => router.push(`/communities/${id}/members` as Href)}
             />
             <Atom.Button
-              label="Invite members"
+              label="Your settings"
               variant="secondary"
-              onPress={() => router.push(`/communities/${id}/invites` as Href)}
+              onPress={() => router.push(`/communities/${id}/member-settings` as Href)}
             />
+            {canManage ? (
+              <>
+                <Atom.Button
+                  label="Community settings"
+                  variant="secondary"
+                  onPress={() => router.push(`/communities/${id}/settings` as Href)}
+                />
+                <Atom.Button
+                  label="Invite members"
+                  variant="secondary"
+                  onPress={() => router.push(`/communities/${id}/invites` as Href)}
+                />
+              </>
+            ) : null}
           </View>
-        ) : null}
+        )}
         {joinError ? <Atom.ErrorMessage>{joinError}</Atom.ErrorMessage> : null}
       </View>
 
+      {isMember && profile?.emailVerifiedAt ? (
+        <PostComposer
+          placeholder={`Share something with ${currentCommunity.name}…`}
+          onPost={handlePost}
+        />
+      ) : null}
       <Atom.ThemedText type="smallBold">Community activity</Atom.ThemedText>
       {postsError ? (
         <View style={styles.state}>
@@ -250,7 +303,13 @@ export function CommunityDetail({ communityId }: { communityId: string }) {
       ) : posts.length ? (
         <View style={styles.posts}>
           {posts.map((item) => (
-            <FeedCard key={entryKey(item)} item={item} onLike={handleLike} />
+            <FeedCard
+              key={entryKey(item)}
+              item={item}
+              onLike={handleLike}
+              onChange={handleFeedChange}
+              canComment={isMember}
+            />
           ))}
           {nextCursor ? (
             <Atom.Button label="Load more" variant="secondary" loading={loadingMore} onPress={loadMore} />
@@ -281,9 +340,6 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.three,
   },
-  managerActions: {
-    gap: Spacing.two,
-  },
   heading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -307,6 +363,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   accountError: {
+    gap: Spacing.two,
+  },
+  navigation: {
     gap: Spacing.two,
   },
   state: {
